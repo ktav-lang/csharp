@@ -19,38 +19,85 @@ dotnet add package Ktav
 
 ## Быстрый старт
 
+### Парсинг — типизированно вытаскиваем поля
+
 ```csharp
 using Ktav;
+
+const string src = """
+                   service: web
+                   port:i 8080
+                   ratio:f 0.75
+                   tls: true
+                   tags: [
+                       prod
+                       eu-west-1
+                   ]
+                   db.host: primary.internal
+                   db.timeout:i 30
+                   """;
+
+var top = (KtavObject)Ktav.Loads(src);
+
+string  service = ((KtavString)  top.TryGet("service")!).Value;
+long    port    = ((KtavInteger) top.TryGet("port")!).ToInt64();
+double  ratio   = ((KtavFloat)   top.TryGet("ratio")!).ToDouble();
+bool    tls     = ((KtavBool)    top.TryGet("tls")!).Value;
+
+var db = (KtavObject) top.TryGet("db")!;
+string dbHost   = ((KtavString)  db.TryGet("host")!).Value;
+long   dbTimeout = ((KtavInteger) db.TryGet("timeout")!).ToInt64();
+```
+
+### Обход — pattern matching по sealed-иерархии `KtavValue`
+
+```csharp
+foreach (var entry in top.Entries)
+{
+    string kind = entry.Value switch
+    {
+        KtavNull        => "null",
+        KtavBool b      => $"bool={b.Value}",
+        KtavInteger i   => $"int={i.Text}",
+        KtavFloat f     => $"float={f.Text}",
+        KtavString s    => $"str=\"{s.Value}\"",
+        KtavArray a     => $"array({a.Items.Count})",
+        KtavObject o    => $"object({o.Entries.Count})",
+        _               => throw new InvalidOperationException(),
+    };
+    Console.WriteLine($"{entry.Key} -> {kind}");
+}
+```
+
+### Билд + рендер — собираем документ в коде
+
+```csharp
 using System.Collections.Generic;
 
-string src = """
-             service: web
-             port:i 8080
-             ratio:f 0.75
-             tls: true
-             tags: [
-                 prod
-                 eu-west-1
-             ]
-             db.host: primary.internal
-             db.timeout:i 30
-             """;
-
-KtavValue cfg = Ktav.Loads(src);
-
-// Pattern-match по семи вариантам:
-string label = cfg switch {
-    KtavObject o => $"top object with {o.Entries.Count} keys",
-    _            => "unexpected shape",
-};
-
-// Обратный рендер:
-var built = new KtavObject(new[] {
-    new KeyValuePair<string, KtavValue>("name",  new KtavString("demo")),
-    new KeyValuePair<string, KtavValue>("count", KtavInteger.Of(42)),
+KtavObject Upstream(string host, long port) => new(new[]
+{
+    new KeyValuePair<string, KtavValue>("host", new KtavString(host)),
+    new KeyValuePair<string, KtavValue>("port", KtavInteger.Of(port)),
 });
-string text = Ktav.Dumps(built);
+
+var doc = new KtavObject(new[]
+{
+    new KeyValuePair<string, KtavValue>("name",      new KtavString("frontend")),
+    new KeyValuePair<string, KtavValue>("port",      KtavInteger.Of(8443)),
+    new KeyValuePair<string, KtavValue>("tls",       KtavBool.True),
+    new KeyValuePair<string, KtavValue>("ratio",     KtavFloat.Of(0.95)),
+    new KeyValuePair<string, KtavValue>("upstreams", new KtavArray(new KtavValue[]
+    {
+        Upstream("a.example", 1080),
+        Upstream("b.example", 1080),
+    })),
+    new KeyValuePair<string, KtavValue>("notes",     KtavNull.Instance),
+});
+
+string text = Ktav.Dumps(doc);
 ```
+
+Полный запускаемый пример — в [`examples/Basic`](examples/Basic/Program.cs).
 
 ## API
 
