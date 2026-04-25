@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ktav\Ktav.csproj" />
+  </ItemGroup>
+
+  <!-- Convenience: copy a locally-built ktav_cabi binary into the test
+       output dir so KTAV_LIB_PATH isn't strictly required for `dotnet test`
+       in a freshly-cloned repo. CI sets KTAV_LIB_PATH explicitly anyway. -->
+  <Target Name="CopyNativeLib" BeforeTargets="Build">
+    <PropertyGroup>
+      <NativeLibDir>..\..\target\release\</NativeLibDir>
+    </PropertyGroup>
+    <Copy Condition="Exists('$(NativeLibDir)ktav_cabi.dll')"
+          SourceFiles="$(NativeLibDir)ktav_cabi.dll"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="Exists('$(NativeLibDir)libktav_cabi.so')"
+          SourceFiles="$(NativeLibDir)libktav_cabi.so"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="Exists('$(NativeLibDir)libktav_cabi.dylib')"
+          SourceFiles="$(NativeLibDir)libktav_cabi.dylib"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

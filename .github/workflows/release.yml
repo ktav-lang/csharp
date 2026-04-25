@@ -1,0 +1,230 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build without publishing"
+        default: "false"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "true"
+
+jobs:
+  # ------------------------------------------------------------------
+  # Cross-compile the cdylib for six platforms. Each job uploads two
+  # artifacts:
+  #   - a uniquely-named GitHub Release asset (matches NativeLoader.cs)
+  #   - the same binary keyed by RID, for the NuGet packing job
+  # ------------------------------------------------------------------
+  build-native:
+    name: native / ${{ matrix.settings.rid }}
+    runs-on: ${{ matrix.settings.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rid: linux-x64
+            artifact: libktav_cabi.so
+            release-asset: libktav_cabi-linux-amd64.so
+            use-zigbuild: true
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            rid: linux-arm64
+            artifact: libktav_cabi.so
+            release-asset: libktav_cabi-linux-arm64.so
+            use-zigbuild: true
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            rid: osx-x64
+            artifact: libktav_cabi.dylib
+            release-asset: libktav_cabi-darwin-amd64.dylib
+            use-zigbuild: false
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            rid: osx-arm64
+            artifact: libktav_cabi.dylib
+            release-asset: libktav_cabi-darwin-arm64.dylib
+            use-zigbuild: false
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rid: win-x64
+            artifact: ktav_cabi.dll
+            release-asset: ktav_cabi-windows-amd64.dll
+            use-zigbuild: false
+
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            rid: win-arm64
+            artifact: ktav_cabi.dll
+            release-asset: ktav_cabi-windows-arm64.dll
+            use-zigbuild: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.settings.target }}
+
+      # zig + cargo-zigbuild for Linux targets — pins minimum glibc to
+      # 2.17 (RHEL 7 / Amazon Linux 2 baseline) and cross-compiles
+      # arm64 from x64 without an apt-installed gcc.
+      - name: Install zig
+        if: matrix.settings.use-zigbuild
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.0
+      - name: Install cargo-zigbuild
+        if: matrix.settings.use-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build (zigbuild)
+        if: matrix.settings.use-zigbuild
+        run: cargo zigbuild --release -p ktav-cabi --target ${{ matrix.settings.target }}.2.17
+
+      - name: Build (native)
+        if: ${{ !matrix.settings.use-zigbuild }}
+        run: cargo build --release -p ktav-cabi --target ${{ matrix.settings.target }}
+
+      # Stage the built binary under two distinct names so artifact
+      # download with merge-multiple does not collide across RIDs.
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p stage/release-asset stage/runtimes/${{ matrix.settings.rid }}
+          src="target/${{ matrix.settings.target }}/release/${{ matrix.settings.artifact }}"
+          ls -la "$src"
+          cp "$src" "stage/release-asset/${{ matrix.settings.release-asset }}"
+          cp "$src" "stage/runtimes/${{ matrix.settings.rid }}/${{ matrix.settings.artifact }}"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-${{ matrix.settings.rid }}
+          path: stage/release-asset/${{ matrix.settings.release-asset }}
+          if-no-files-found: error
+
+      - name: Upload runtimes payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtimes-${{ matrix.settings.rid }}
+          path: stage/runtimes/
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------
+  # Pack the NuGet with all six native binaries laid out under
+  # runtimes/<rid>/native/.
+  # ------------------------------------------------------------------
+  pack:
+    name: Pack NuGet
+    runs-on: ubuntu-latest
+    needs: [build-native]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Download runtimes payloads
+        uses: actions/download-artifact@v4
+        with:
+          pattern: runtimes-*
+          path: runtimes-staging
+          merge-multiple: true
+
+      - name: Lay out runtimes/ for csproj
+        shell: bash
+        run: |
+          mkdir -p src/Ktav/runtimes
+          for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
+            mkdir -p "src/Ktav/runtimes/${rid}/native"
+            cp -v runtimes-staging/${rid}/* "src/Ktav/runtimes/${rid}/native/"
+          done
+          find src/Ktav/runtimes -type f | sort
+
+      - name: Pack
+        run: dotnet pack src/Ktav/Ktav.csproj -c Release -o artifacts
+
+      - name: Verify nupkg contains all six runtimes
+        shell: bash
+        run: |
+          set -e
+          nupkg=$(ls artifacts/*.nupkg | head -1)
+          echo "Inspecting: $nupkg"
+          unzip -l "$nupkg" | tee /tmp/nupkg-listing
+          for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
+            grep -q "runtimes/${rid}/native/" /tmp/nupkg-listing \
+              || { echo "missing runtime: ${rid}"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------
+  # Attach the six native binaries + the NuGet to the GitHub Release.
+  # Push the NuGet to nuget.org if the tag is present and not a dry-run.
+  # ------------------------------------------------------------------
+  release:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: [pack]
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: nuget
+      url: https://www.nuget.org/packages/Ktav
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-asset-*
+          path: release-assets
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: nupkg
+
+      - name: List artifacts
+        run: ls -la release-assets/ nupkg/
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/*
+            nupkg/*.nupkg
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+      - name: Push to NuGet
+        if: github.event.inputs.dry-run != 'true'
+        run: |
+          dotnet nuget push nupkg/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

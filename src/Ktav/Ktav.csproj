@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Ktav</RootNamespace>
+    <AssemblyName>Ktav</AssemblyName>
+
+    <!-- NuGet metadata -->
+    <PackageId>Ktav</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Marat K</Authors>
+    <Description>.NET bindings for Ktav — a plain configuration format. Thin wrapper around the reference Rust parser via P/Invoke; no native build on the consumer side.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ktav-lang/csharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ktav-lang/csharp</PackageProjectUrl>
+    <PackageTags>ktav;config;configuration;parser;serializer</PackageTags>
+
+    <!-- AOT-friendly on net8.0 -->
+    <IsAotCompatible Condition="'$(TargetFramework)' == 'net8.0'">true</IsAotCompatible>
+    <EnableTrimAnalyzer Condition="'$(TargetFramework)' == 'net8.0'">true</EnableTrimAnalyzer>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="Ktav.Tests" />
+  </ItemGroup>
+
+  <!-- Native binaries packed into NuGet under runtimes/<RID>/native/.
+       Populated by the release workflow before `dotnet pack` — locally
+       these globs are empty, so source-clone consumers must point
+       KTAV_LIB_PATH at a self-built ktav_cabi binary. -->
+  <ItemGroup>
+    <None Include="runtimes/**/*" Pack="true" PackagePath="runtimes/" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>

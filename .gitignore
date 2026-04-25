@@ -1,0 +1,48 @@
+# Build artifacts
+/target/
+**/bin/
+**/obj/
+**/dist/
+**/node_modules/
+
+# Native binaries are populated by the release workflow before
+# `dotnet pack`. Locally the dir is empty (and absent from git).
+src/Ktav/runtimes/
+
+# Rust (Cargo.lock is committed for cdylib)
+
+# .NET
+*.user
+*.suo
+*.cache
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+.vs/
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Rust backups
+**/*.rs.bk
+
+# Editor extras
+.zed/
+*.code-workspace
+.history/
+
+# Local drafts
+docs_local/
