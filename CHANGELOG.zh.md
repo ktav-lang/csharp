@@ -10,6 +10,17 @@ MINOR 递增视为破坏性变更。
 本 changelog 跟踪 **绑定发布**,不覆盖 Ktav 格式自身的变更 ——
 后者见 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md)。
 
+## 0.1.1 —— 2026-04-26
+
+### 变更
+
+- **升级到 `ktav 0.1.4`** —— 上游 Rust crate 中 `cabi` 使用的 untyped
+  `parse() → Value` 路径,小文档加速约 30%、大文档加速约 13%,只是
+  `Frame::Object` 的初始容量微调(4 → 8)。每次 `Ktav.Loads` 都会
+  透明地受益。
+
+NuGet 包:**`Ktav`**,版本 0.1.1。
+
 ## 0.1.0 —— 首次公开发布
 
 首次发布。目标格式版本:**Ktav 0.1**。

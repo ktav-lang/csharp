@@ -26,7 +26,7 @@ namespace Ktav;
 internal static class NativeLoader
 {
     /// <summary>Version of <c>ktav_cabi</c> this build expects. Bump per release.</summary>
-    public const string LibVersion = "0.1.0";
+    public const string LibVersion = "0.1.1";
 
     private const string ReleaseBase =
         "https://github.com/ktav-lang/csharp/releases/download/v";
@@ -184,7 +184,7 @@ namespace Ktav;
 
 internal static class NativeLoader
 {
-    public const string LibVersion = "0.1.0";
+    public const string LibVersion = "0.1.1";
     public static void EnsureRegistered() { /* no-op on netstandard2.0 */ }
 }
 #endif
