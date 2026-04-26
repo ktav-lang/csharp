@@ -158,5 +158,12 @@ string text = Ktav.Dumps(doc);
 
 MIT —— 见 [LICENSE](LICENSE)。
 
-规范:[ktav-lang/spec](https://github.com/ktav-lang/spec)。
-参考 Rust crate:[ktav-lang/rust](https://github.com/ktav-lang/rust)。
+## 其他 Ktav 实现
+
+- [`spec`](https://github.com/ktav-lang/spec) —— 规范 + 一致性测试套件
+- [`rust`](https://github.com/ktav-lang/rust) —— 参考 Rust crate(`cargo add ktav`)
+- [`golang`](https://github.com/ktav-lang/golang) —— Go(`go get github.com/ktav-lang/golang`)
+- [`java`](https://github.com/ktav-lang/java) —— Java / JVM(`io.github.ktav-lang:ktav`,Maven Central)
+- [`js`](https://github.com/ktav-lang/js) —— JS / TS(`npm install @ktav-lang/ktav`)
+- [`php`](https://github.com/ktav-lang/php) —— PHP(`composer require ktav-lang/ktav`)
+- [`python`](https://github.com/ktav-lang/python) —— Python(`pip install ktav`)
