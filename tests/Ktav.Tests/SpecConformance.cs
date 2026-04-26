@@ -16,38 +16,8 @@ namespace Ktav.Tests;
 [TestFixture]
 public class SpecConformance
 {
-    /// <summary>
-    /// Returns the path to the directory containing <c>valid/</c> and
-    /// <c>invalid/</c> fixture trees. Honours <c>KTAV_SPEC_ROOT</c>
-    /// (matching the Go / Java bindings: the env points at the
-    /// <c>tests</c> dir directly), then walks the working tree looking
-    /// for the <c>spec</c> submodule.
-    /// </summary>
-    private static string FindTestsDir()
-    {
-        var env = Environment.GetEnvironmentVariable("KTAV_SPEC_ROOT");
-        if (!string.IsNullOrEmpty(env) && Directory.Exists(env))
-            return env!;
-
-        var here = TestContext.CurrentContext.TestDirectory;
-        for (string? dir = here; dir != null; dir = Path.GetDirectoryName(dir))
-        {
-            var candidate = Path.Combine(dir, "spec", "versions", "0.1", "tests");
-            if (Directory.Exists(candidate)) return candidate;
-        }
-
-        var workspace = Path.GetFullPath(Path.Combine(here, "..", "..", "..", "..", ".."));
-        var sibling = Path.Combine(workspace, "spec", "versions", "0.1", "tests");
-        if (Directory.Exists(sibling)) return sibling;
-
-        throw new DirectoryNotFoundException(
-            "Ktav spec fixtures not found. Initialise the `spec` submodule "
-            + "or set KTAV_SPEC_ROOT to <repo>/spec/versions/0.1/tests.");
-    }
-
-    private static readonly string s_testsDir = FindTestsDir();
-    private static readonly string s_validDir = Path.Combine(s_testsDir, "valid");
-    private static readonly string s_invalidDir = Path.Combine(s_testsDir, "invalid");
+    private static readonly string s_validDir = Path.Combine(TestPaths.Spec, "valid");
+    private static readonly string s_invalidDir = Path.Combine(TestPaths.Spec, "invalid");
 
     public static IEnumerable<TestCaseData> ValidCases()
     {

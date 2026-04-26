@@ -32,6 +32,7 @@ internal static class NativeLoader
         "https://github.com/ktav-lang/csharp/releases/download/v";
 
     private static int s_initialised;
+    private static string? s_testOverride;
 
     public static void EnsureRegistered()
     {
@@ -40,11 +41,25 @@ internal static class NativeLoader
         NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, Resolve);
     }
 
+    /// <summary>
+    /// Test hook — pins the on-disk path the resolver will dlopen.
+    /// Production users override via <c>$KTAV_LIB_PATH</c>.
+    /// </summary>
+    internal static void SetLibraryPath(string path) => s_testOverride = path;
+
     private static IntPtr Resolve(string libraryName, System.Reflection.Assembly assembly,
         DllImportSearchPath? searchPath)
     {
         if (libraryName != NativeMethods.LibName)
             return IntPtr.Zero;
+
+        if (!string.IsNullOrEmpty(s_testOverride))
+        {
+            if (!File.Exists(s_testOverride))
+                throw new DllNotFoundException(
+                    $"SetLibraryPath(\"{s_testOverride}\"): file not found");
+            return NativeLibrary.Load(s_testOverride);
+        }
 
         var env = Environment.GetEnvironmentVariable("KTAV_LIB_PATH");
         if (!string.IsNullOrEmpty(env))
