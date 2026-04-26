@@ -13,7 +13,8 @@ internal static partial class NativeMethods
 {
     /// <summary>
     /// Logical name resolved by <see cref="NativeLoader"/> through
-    /// <see cref="System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver"/>.
+    /// <c>NativeLibrary.SetDllImportResolver</c> on <c>net8.0+</c>; on
+    /// <c>netstandard2.0</c> the runtime's default loader handles it.
     /// </summary>
     public const string LibName = "ktav_cabi";
 

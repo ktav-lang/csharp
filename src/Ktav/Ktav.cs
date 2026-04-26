@@ -16,12 +16,18 @@ namespace Ktav;
 /// </code>
 /// </example>
 /// <remarks>
-/// The native library is loaded lazily on first call. Override the
-/// lookup path with <c>$KTAV_LIB_PATH</c> (useful for local dev or air-
-/// gapped environments). Otherwise the matching binary is loaded from
-/// the bundled NuGet <c>runtimes/&lt;rid&gt;/native/</c> layout, or
-/// downloaded once from the companion GitHub Release into the user
-/// cache.
+/// The native library is loaded lazily on first call. On <c>net8.0</c>
+/// and later, override the lookup path with <c>$KTAV_LIB_PATH</c>
+/// (useful for local dev or air-gapped environments). Otherwise the
+/// matching binary is loaded from the bundled NuGet
+/// <c>runtimes/&lt;rid&gt;/native/</c> layout, or downloaded once from
+/// the companion GitHub Release into the user cache.
+/// <para>
+/// On <c>netstandard2.0</c> targets the custom resolver API is not
+/// available — <c>$KTAV_LIB_PATH</c> is ignored and the runtime falls
+/// back to the default loader (NuGet <c>runtimes/</c> layout, system
+/// search paths, or <c>LD_LIBRARY_PATH</c>).
+/// </para>
 /// </remarks>
 public static class Ktav
 {
@@ -128,11 +134,18 @@ public static class Ktav
     private static byte[] CopyBytesAndFree(IntPtr ptr, nuint len)
     {
         if (ptr == IntPtr.Zero || len == 0) return Array.Empty<byte>();
-        if (len > int.MaxValue) throw new KtavException("native buffer too large: " + len);
-        var arr = new byte[(int)len];
-        Marshal.Copy(ptr, arr, 0, arr.Length);
-        NativeMethods.ktav_free(ptr, len);
-        return arr;
+        try
+        {
+            if (len > int.MaxValue)
+                throw new KtavException("native buffer too large: " + len);
+            var arr = new byte[(int)len];
+            Marshal.Copy(ptr, arr, 0, arr.Length);
+            return arr;
+        }
+        finally
+        {
+            NativeMethods.ktav_free(ptr, len);
+        }
     }
 
     private static void FreeIfPresent(IntPtr ptr, nuint len)
@@ -149,11 +162,18 @@ public static class Ktav
     private static byte[] CopyBytesAndFree(IntPtr ptr, UIntPtr len)
     {
         if (ptr == IntPtr.Zero || (ulong)len == 0) return Array.Empty<byte>();
-        if ((ulong)len > int.MaxValue) throw new KtavException("native buffer too large: " + len);
-        var arr = new byte[(int)len];
-        Marshal.Copy(ptr, arr, 0, arr.Length);
-        NativeMethods.ktav_free(ptr, len);
-        return arr;
+        try
+        {
+            if ((ulong)len > int.MaxValue)
+                throw new KtavException("native buffer too large: " + len);
+            var arr = new byte[(int)len];
+            Marshal.Copy(ptr, arr, 0, arr.Length);
+            return arr;
+        }
+        finally
+        {
+            NativeMethods.ktav_free(ptr, len);
+        }
     }
 
     private static void FreeIfPresent(IntPtr ptr, UIntPtr len)

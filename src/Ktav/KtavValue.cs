@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace Ktav;
@@ -92,6 +93,10 @@ public sealed record KtavString(string Value) : KtavValue
 /// <summary>Multi-line <c>[ ... ]</c> array.</summary>
 public sealed record KtavArray(IReadOnlyList<KtavValue> Items) : KtavValue
 {
+    /// <summary>The array contents — defensively copied at construction.</summary>
+    public IReadOnlyList<KtavValue> Items { get; init; } =
+        (Items ?? throw new ArgumentNullException(nameof(Items))).ToArray();
+
     public override string ToString() => $"[{Items.Count}]";
 }
 
@@ -101,7 +106,16 @@ public sealed record KtavArray(IReadOnlyList<KtavValue> Items) : KtavValue
 /// </summary>
 public sealed record KtavObject(IReadOnlyList<KeyValuePair<string, KtavValue>> Entries) : KtavValue
 {
-    /// <summary>O(1) lookup view; lazy.</summary>
+    /// <summary>The entries — defensively copied at construction.</summary>
+    public IReadOnlyList<KeyValuePair<string, KtavValue>> Entries { get; init; } =
+        (Entries ?? throw new ArgumentNullException(nameof(Entries))).ToArray();
+
+    /// <summary>
+    /// Linear lookup over <see cref="Entries"/>. Suitable for typical
+    /// configuration shapes; if you need O(1) access, materialise a
+    /// <see cref="System.Collections.Generic.Dictionary{TKey, TValue}"/>
+    /// from <see cref="Entries"/> yourself.
+    /// </summary>
     public KtavValue? TryGet(string key)
     {
         for (int i = 0; i < Entries.Count; i++)

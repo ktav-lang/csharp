@@ -31,14 +31,23 @@ internal static class NativeLoader
     private const string ReleaseBase =
         "https://github.com/ktav-lang/csharp/releases/download/v";
 
-    private static int s_initialised;
-    private static string? s_testOverride;
+    private static readonly object s_initLock = new();
+    private static bool s_initialised;
+    private static volatile string? s_testOverride;
 
     public static void EnsureRegistered()
     {
-        if (Interlocked.Exchange(ref s_initialised, 1) != 0)
+        // Double-checked locking: the racing path used Interlocked.Exchange
+        // and let losing threads return *before* SetDllImportResolver
+        // actually ran — leaving them to hit the default resolver.
+        if (Volatile.Read(ref s_initialised))
             return;
-        NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, Resolve);
+        lock (s_initLock)
+        {
+            if (s_initialised) return;
+            NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, Resolve);
+            Volatile.Write(ref s_initialised, true);
+        }
     }
 
     /// <summary>
@@ -133,17 +142,41 @@ internal static class NativeLoader
 
     private static void Download(string url, string targetPath)
     {
-        var tmp = targetPath + ".tmp";
-        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-        using var resp = http.GetAsync(url).GetAwaiter().GetResult();
-        resp.EnsureSuccessStatusCode();
-        using (var fs = File.Create(tmp))
-        using (var stream = resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+        // Per-process unique temp name so concurrent downloaders don't
+        // clobber each other; flush-to-disk before rename so a crash
+        // can't leave a half-written file that a peer process treats
+        // as cached; atomic File.Move(.., overwrite: true) so there's
+        // no Delete/Move window where the target appears missing.
+        var tmp = targetPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
         {
-            stream.CopyTo(fs);
+            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
+            using (var resp = http.GetAsync(url).GetAwaiter().GetResult())
+            {
+                resp.EnsureSuccessStatusCode();
+                using (var fs = File.Create(tmp))
+                using (var stream = resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+                {
+                    stream.CopyTo(fs);
+                    fs.Flush(flushToDisk: true);
+                }
+            }
+
+            try
+            {
+                File.Move(tmp, targetPath, overwrite: true);
+            }
+            catch (IOException) when (File.Exists(targetPath))
+            {
+                // Another process already placed (and possibly opened)
+                // the target. Discard our copy and use theirs.
+            }
         }
-        if (File.Exists(targetPath)) File.Delete(targetPath);
-        File.Move(tmp, targetPath);
+        finally
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); }
+            catch { /* best-effort cleanup */ }
+        }
     }
 }
 #else
