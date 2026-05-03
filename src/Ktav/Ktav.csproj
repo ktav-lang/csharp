@@ -11,7 +11,7 @@
 
     <!-- NuGet metadata -->
     <PackageId>Ktav</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Authors>Marat K</Authors>
     <Description>.NET bindings for Ktav — a plain configuration format. Thin wrapper around the reference Rust parser via P/Invoke; no native build on the consumer side.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

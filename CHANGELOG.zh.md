@@ -10,6 +10,22 @@ MINOR 递增视为破坏性变更。
 本 changelog 跟踪 **绑定发布**,不覆盖 Ktav 格式自身的变更 ——
 后者见 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md)。
 
+## 0.1.2 —— 2026-05-03
+
+### 变更
+
+- **已采用 `ktav 0.1.5`** —— 上游 Rust crate 引入了结构化错误 API
+  (`Error::Structured(ErrorKind)` 带字节偏移 span)、对错误枚举追溯
+  应用了 `#[non_exhaustive]`,以及公开的事件式解析器 `ktav::thin`。
+  .NET 绑定对用户可见的行为没有变化:`KtavException` 仍携带相同的
+  人类可读消息(七个标准类别的 Display 字符串与 ktav 0.1.4 完全
+  字节相同,由 ktav 自己的 pinning 测试验证)。将 `ktav::ErrorKind`
+  映射到结构化 .NET 异常层级(`KtavMissingSeparatorSpaceException`、
+  `KtavDuplicateKeyException` 等)是单独的后续工作,记录在
+  [`STRUCTURED_ERRORS.md`](https://github.com/ktav-lang/.github/blob/main/STRUCTURED_ERRORS.md)。
+
+NuGet 包:**`Ktav`**,版本 0.1.2。
+
 ## 0.1.1 —— 2026-04-26
 
 ### 变更
