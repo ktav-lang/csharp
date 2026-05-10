@@ -11,6 +11,40 @@ This changelog tracks **binding releases**, not changes to the Ktav
 format itself — see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## 0.3.1 — 2026-05-10
+
+### Added
+
+- **`Ktav.DumpsForceStrings(KtavValue)`** — render any value with every
+  scalar coerced to a `String` (typed integers `:i`, typed floats `:f`,
+  booleans, and `null` are flattened to their textual form via the
+  raw-marker `::`). Compounds preserve their structure; only leaf
+  scalars are coerced. Re-parsing the output yields the same set of
+  `KtavString` scalars. Useful for "everything is a string" dumps and
+  diff-friendly canonical text.
+- **Top-level Array support** (spec § 5.0.1, added in spec 0.1.1) — a
+  document whose first content line is an array-item shape (bare
+  scalar, `:: text`, `:i 42`, `:f 3.14`, lone `{` / `[`, multi-line
+  opener `(` / `((`) now parses as a root-level `KtavArray` instead of
+  raising. Empty / comments-only docs still default to `KtavObject`.
+  `Ktav.Dumps` now accepts a top-level `KtavArray` (renders as bare
+  item-per-line, no surrounding brackets).
+
+### Changed
+
+- **Picked up `ktav 0.3.1`** — tracks upstream Rust crate `0.3.1`. See
+  the [`ktav` crate CHANGELOG](https://github.com/ktav-lang/rust/blob/main/CHANGELOG.md)
+  for the full delta.
+
+### Spec
+
+- spec submodule synced to `0.1.1` — adds `valid/top_level_array/`
+  fixtures (bare scalars, typed items, multi-line items, nested
+  arrays, nested objects, comments-and-blanks).
+
+NuGet package: **`Ktav`**, version 0.3.1.
+
+
 ## 0.3.0 — 2026-05-08
 
 ### Changed

@@ -32,6 +32,12 @@ internal static partial class NativeMethods
         out IntPtr outErr, out nuint outErrLen);
 
     [LibraryImport(LibName)]
+    public static partial int ktav_dumps_force_strings(
+        IntPtr src, nuint srcLen,
+        out IntPtr outBuf, out nuint outLen,
+        out IntPtr outErr, out nuint outErrLen);
+
+    [LibraryImport(LibName)]
     public static partial void ktav_free(IntPtr ptr, nuint len);
 
     [LibraryImport(LibName)]
@@ -45,6 +51,12 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int ktav_dumps(
+        IntPtr src, UIntPtr srcLen,
+        out IntPtr outBuf, out UIntPtr outLen,
+        out IntPtr outErr, out UIntPtr outErrLen);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_dumps_force_strings(
         IntPtr src, UIntPtr srcLen,
         out IntPtr outBuf, out UIntPtr outLen,
         out IntPtr outErr, out UIntPtr outErrLen);

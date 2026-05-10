@@ -38,24 +38,52 @@ public static class Ktav
         if (src == null) throw new ArgumentNullException(nameof(src));
         NativeLoader.EnsureRegistered();
         var bytes = Encoding.UTF8.GetBytes(src);
-        var output = CallNative(loads: true, bytes);
+        var output = CallNative(NativeOp.Loads, bytes);
         return WireJson.Decode(output);
     }
 
     /// <summary>
     /// Render a <see cref="KtavValue"/> back to Ktav text. The top-level
-    /// value must be a <see cref="KtavObject"/> — other shapes are
+    /// value must be a <see cref="KtavObject"/> or <see cref="KtavArray"/>
+    /// (top-level Array support added in spec 0.1.1) — other shapes are
     /// rejected.
     /// </summary>
     /// <exception cref="KtavException">on any render error.</exception>
     public static string Dumps(KtavValue value)
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
-        if (value is not KtavObject)
-            throw new KtavException("top-level Ktav document must be an object");
+        if (value is not (KtavObject or KtavArray))
+            throw new KtavException("top-level Ktav document must be an object or array");
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value);
-        var output = CallNative(loads: false, input);
+        var output = CallNative(NativeOp.Dumps, input);
+        return Encoding.UTF8.GetString(output);
+    }
+
+    /// <summary>
+    /// Render a <see cref="KtavValue"/> back to Ktav text with **every
+    /// scalar coerced to a String** — typed integers (<c>:i</c>), typed
+    /// floats (<c>:f</c>), booleans, and null are flattened to their
+    /// textual form via the raw-marker <c>::</c>. Compounds preserve
+    /// their structure; only leaf scalars are coerced. The output
+    /// round-trips back through <see cref="Loads"/> as the same set of
+    /// <see cref="KtavString"/> scalars.
+    /// </summary>
+    /// <remarks>
+    /// Useful for "everything is a string" dumps — e.g. for downstream
+    /// consumers that don't understand typed markers, or for diff-
+    /// friendly canonical text. Top-level value must be a
+    /// <see cref="KtavObject"/> or <see cref="KtavArray"/>.
+    /// </remarks>
+    /// <exception cref="KtavException">on any render error.</exception>
+    public static string DumpsForceStrings(KtavValue value)
+    {
+        if (value == null) throw new ArgumentNullException(nameof(value));
+        if (value is not (KtavObject or KtavArray))
+            throw new KtavException("top-level Ktav document must be an object or array");
+        NativeLoader.EnsureRegistered();
+        var input = WireJson.Encode(value);
+        var output = CallNative(NativeOp.DumpsForceStrings, input);
         return Encoding.UTF8.GetString(output);
     }
 
@@ -77,7 +105,9 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private static byte[] CallNative(bool loads, byte[] input)
+    private enum NativeOp { Loads, Dumps, DumpsForceStrings }
+
+    private static byte[] CallNative(NativeOp op, byte[] input)
     {
         IntPtr inputPtr = IntPtr.Zero;
         try
@@ -89,17 +119,51 @@ public static class Ktav
             }
 
 #if NET8_0_OR_GREATER
-            int rc = loads
-                ? NativeMethods.ktav_loads(inputPtr, (nuint)input.Length,
-                    out var outBuf, out var outLen, out var outErr, out var outErrLen)
-                : NativeMethods.ktav_dumps(inputPtr, (nuint)input.Length,
-                    out outBuf, out outLen, out outErr, out outErrLen);
+            int rc;
+            IntPtr outBuf;
+            nuint outLen;
+            IntPtr outErr;
+            nuint outErrLen;
+            switch (op)
+            {
+                case NativeOp.Loads:
+                    rc = NativeMethods.ktav_loads(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.Dumps:
+                    rc = NativeMethods.ktav_dumps(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.DumpsForceStrings:
+                    rc = NativeMethods.ktav_dumps_force_strings(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                default:
+                    throw new InvalidOperationException("unknown native op: " + op);
+            }
 #else
-            int rc = loads
-                ? NativeMethods.ktav_loads(inputPtr, (UIntPtr)input.Length,
-                    out var outBuf, out var outLen, out var outErr, out var outErrLen)
-                : NativeMethods.ktav_dumps(inputPtr, (UIntPtr)input.Length,
-                    out outBuf, out outLen, out outErr, out outErrLen);
+            int rc;
+            IntPtr outBuf;
+            UIntPtr outLen;
+            IntPtr outErr;
+            UIntPtr outErrLen;
+            switch (op)
+            {
+                case NativeOp.Loads:
+                    rc = NativeMethods.ktav_loads(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.Dumps:
+                    rc = NativeMethods.ktav_dumps(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.DumpsForceStrings:
+                    rc = NativeMethods.ktav_dumps_force_strings(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                default:
+                    throw new InvalidOperationException("unknown native op: " + op);
+            }
 #endif
 
             if (rc != 0)
