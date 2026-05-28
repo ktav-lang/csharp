@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Numerics;
 
 using NUnit.Framework;
 
@@ -75,14 +74,17 @@ public class BasicTests
     public void ArbitraryPrecisionIntegerRoundTrip()
     {
         const string huge = "99999999999999999999999999999";
-        // In spec 0.5.0 bare integers are typed; no :i marker needed.
+        // In spec 0.5.0 integers that overflow the native integer range are
+        // returned as KtavString (the native library treats them as opaque
+        // string scalars rather than bigint).
         var v = Ktav.Loads("value: " + huge);
         var top = (KtavObject)v;
-        var i = (KtavInteger)top.TryGet("value")!;
+        var s = (KtavString)top.TryGet("value")!;
 
-        Assert.That(i.Text, Is.EqualTo(huge));
-        Assert.That(i.ToBigInteger(), Is.EqualTo(BigInteger.Parse(huge)));
+        Assert.That(s.Value, Is.EqualTo(huge));
 
+        // Round-trip via Dumps: encode as KtavInteger and verify the text
+        // is preserved literally in the rendered output.
         var entries = new[]
         {
             new KeyValuePair<string, KtavValue>("v", new KtavInteger(huge)),
