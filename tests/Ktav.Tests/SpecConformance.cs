@@ -24,7 +24,9 @@ public class SpecConformance
         if (!Directory.Exists(s_validDir))
             yield break;
         foreach (var ktavPath in Directory.EnumerateFiles(s_validDir, "*.ktav",
-                     SearchOption.AllDirectories).OrderBy(p => p))
+                     SearchOption.AllDirectories)
+                     .Where(p => !p.EndsWith(".canonical.ktav", StringComparison.Ordinal))
+                     .OrderBy(p => p))
         {
             var name = Path.GetRelativePath(s_validDir, ktavPath).Replace('\\', '/');
             yield return new TestCaseData(ktavPath).SetName($"valid:{name}");

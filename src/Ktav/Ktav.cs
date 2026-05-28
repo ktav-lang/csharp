@@ -62,18 +62,17 @@ public static class Ktav
 
     /// <summary>
     /// Render a <see cref="KtavValue"/> back to Ktav text with **every
-    /// scalar coerced to a String** — typed integers (<c>:i</c>), typed
-    /// floats (<c>:f</c>), booleans, and null are flattened to their
-    /// textual form via the raw-marker <c>::</c>. Compounds preserve
-    /// their structure; only leaf scalars are coerced. The output
-    /// round-trips back through <see cref="Loads"/> as the same set of
-    /// <see cref="KtavString"/> scalars.
+    /// scalar coerced to a String** — booleans, integers, floats, and
+    /// null are flattened to their textual form via the raw-marker
+    /// <c>::</c>. Compounds preserve their structure; only leaf scalars
+    /// are coerced. The output round-trips back through
+    /// <see cref="Loads"/> as the same set of <see cref="KtavString"/>
+    /// scalars.
     /// </summary>
     /// <remarks>
     /// Useful for "everything is a string" dumps — e.g. for downstream
-    /// consumers that don't understand typed markers, or for diff-
-    /// friendly canonical text. Top-level value must be a
-    /// <see cref="KtavObject"/> or <see cref="KtavArray"/>.
+    /// consumers that don't understand typed markers. Top-level value
+    /// must be a <see cref="KtavObject"/> or <see cref="KtavArray"/>.
     /// </remarks>
     /// <exception cref="KtavException">on any render error.</exception>
     public static string DumpsForceStrings(KtavValue value)
@@ -84,6 +83,29 @@ public static class Ktav
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value);
         var output = CallNative(NativeOp.DumpsForceStrings, input);
+        return Encoding.UTF8.GetString(output);
+    }
+
+    /// <summary>
+    /// Render a <see cref="KtavValue"/> to its **canonical (normalised)
+    /// Ktav form** as defined by spec § 5.9. The output is idempotent:
+    /// parsing it and calling <see cref="EmitCanonical"/> again yields
+    /// byte-identical output. Useful for normalising config files,
+    /// diffing, and storing a canonical source of truth.
+    /// </summary>
+    /// <remarks>
+    /// Top-level value must be a <see cref="KtavObject"/> or
+    /// <see cref="KtavArray"/>.
+    /// </remarks>
+    /// <exception cref="KtavException">on any render error.</exception>
+    public static string EmitCanonical(KtavValue value)
+    {
+        if (value == null) throw new ArgumentNullException(nameof(value));
+        if (value is not (KtavObject or KtavArray))
+            throw new KtavException("top-level Ktav document must be an object or array");
+        NativeLoader.EnsureRegistered();
+        var input = WireJson.Encode(value);
+        var output = CallNative(NativeOp.EmitCanonical, input);
         return Encoding.UTF8.GetString(output);
     }
 
@@ -105,7 +127,7 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private enum NativeOp { Loads, Dumps, DumpsForceStrings }
+    private enum NativeOp { Loads, Dumps, DumpsForceStrings, EmitCanonical }
 
     private static byte[] CallNative(NativeOp op, byte[] input)
     {
@@ -138,6 +160,10 @@ public static class Ktav
                     rc = NativeMethods.ktav_dumps_force_strings(inputPtr, (nuint)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
+                case NativeOp.EmitCanonical:
+                    rc = NativeMethods.ktav_emit_canonical(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
                 default:
                     throw new InvalidOperationException("unknown native op: " + op);
             }
@@ -159,6 +185,10 @@ public static class Ktav
                     break;
                 case NativeOp.DumpsForceStrings:
                     rc = NativeMethods.ktav_dumps_force_strings(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.EmitCanonical:
+                    rc = NativeMethods.ktav_emit_canonical(inputPtr, (UIntPtr)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
                 default:

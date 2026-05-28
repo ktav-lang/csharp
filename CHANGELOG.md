@@ -11,6 +11,47 @@ This changelog tracks **binding releases**, not changes to the Ktav
 format itself — see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## 0.5.0 — 2026-05-28
+
+### Breaking
+
+- **Spec 0.5.0 — typed markers removed.** The `:i` / `:f` prefixes no
+  longer exist in the format. Bare numbers are now typed automatically:
+  integers parse as `KtavInteger`, decimals as `KtavFloat`. Documents
+  written with `:i` / `:f` markers must be migrated (replace `port:i 8080`
+  with `port: 8080`).
+- **`KtavValue` type inference updated.** `KtavString` is now only
+  produced for non-numeric, non-keyword bare scalars or explicit `:: text`
+  raw-marker values.
+
+### Added
+
+- **`Ktav.EmitCanonical(KtavValue)`** — renders a value to the
+  normalised canonical Ktav form defined by spec § 5.9. The output is
+  idempotent: parsing it and calling `EmitCanonical` again yields
+  byte-identical output. Useful for normalising config files, diffing,
+  and storing a canonical source of truth.
+- **`ktav_emit_canonical` C ABI export** in `crates/cabi`.
+
+### Changed
+
+- **Picked up `ktav 0.5.0`** — tracks upstream Rust crate `0.5.0`.
+  See the [`ktav` crate CHANGELOG](https://github.com/ktav-lang/rust/blob/main/CHANGELOG.md)
+  for the full delta.
+- **License changed to `MIT OR Apache-2.0`** (dual-licensed). Added
+  `LICENSE-MIT` and `LICENSE-APACHE` files; the former `LICENSE` file
+  is kept as `LICENSE-MIT`.
+
+### Spec
+
+- spec submodule synced to `v0.5.0` — adds the canonical-form fixtures
+  (`*.canonical.ktav`) alongside each `valid/` fixture. The
+  `SpecConformance` test skips `.canonical.ktav` files during the
+  round-trip suite (they are used only by the canonical-emit tests).
+
+NuGet package: **`Ktav`**, version 0.5.0.
+
+
 ## 0.3.1 — 2026-05-10
 
 ### Added

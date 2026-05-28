@@ -11,17 +11,18 @@ public class BasicTests
     [Test]
     public void LoadsBasicDocument()
     {
+        // In spec 0.5.0 bare numbers are typed automatically; no :i / :f markers.
         var src = """
                   service: web
-                  port:i 8080
-                  ratio:f 0.75
+                  port: 8080
+                  ratio: 0.75
                   tls: true
                   tags: [
                       prod
                       eu-west-1
                   ]
                   db.host: primary
-                  db.timeout:i 30
+                  db.timeout: 30
                   """;
 
         var v = Ktav.Loads(src);
@@ -74,7 +75,8 @@ public class BasicTests
     public void ArbitraryPrecisionIntegerRoundTrip()
     {
         const string huge = "99999999999999999999999999999";
-        var v = Ktav.Loads("value:i " + huge);
+        // In spec 0.5.0 bare integers are typed; no :i marker needed.
+        var v = Ktav.Loads("value: " + huge);
         var top = (KtavObject)v;
         var i = (KtavInteger)top.TryGet("value")!;
 
@@ -99,7 +101,7 @@ public class BasicTests
     [Test]
     public void DumpsAcceptsTopLevelArray()
     {
-        // spec 0.1.1 § 5.0.1: a top-level Array renders as bare
+        // spec 0.5.0 § 5.0.1: a top-level Array renders as bare
         // item-per-line with no surrounding brackets.
         var arr = new KtavArray(new KtavValue[]
         {
@@ -123,7 +125,7 @@ public class BasicTests
     public void DumpsRejectsScalarTopLevel()
     {
         // The top level must be a compound (Object or Array per
-        // spec 0.1.1 § 5.0.1) — a bare scalar is rejected.
+        // spec 0.5.0 § 5.0.1) — a bare scalar is rejected.
         Assert.Throws<KtavException>(() => Ktav.Dumps(new KtavString("x")));
         Assert.Throws<KtavException>(() => Ktav.Dumps(KtavBool.True));
         Assert.Throws<KtavException>(() => Ktav.Dumps(KtavInteger.Of(1)));
@@ -145,7 +147,9 @@ public class BasicTests
     [Test]
     public void LoadsTopLevelArrayTypedItems()
     {
-        var src = ":i 1\n:i 2\n:f 3.14\n:: bare-text\n";
+        // In spec 0.5.0 bare numbers are typed automatically; :: is the
+        // raw-string marker (forces String regardless of content).
+        var src = "1\n2\n3.14\n:: bare-text\n";
         var v = Ktav.Loads(src);
         Assert.That(v, Is.InstanceOf<KtavArray>());
         var items = ((KtavArray)v).Items;

@@ -161,7 +161,7 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 
 ## Лицензия
 
-MIT — см. [LICENSE](LICENSE).
+MIT OR Apache-2.0 — см. [LICENSE-MIT](LICENSE-MIT) и [LICENSE-APACHE](LICENSE-APACHE).
 
 ## Другие реализации Ktav
 

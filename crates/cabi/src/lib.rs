@@ -1,33 +1,31 @@
-//! C ABI wrapper around the `ktav` Rust crate, designed for consumption
-//! from Go via `purego` (dynamic loading, no cgo on the caller side).
+//! C ABI wrapper around the `ktav` Rust crate, consumed by the .NET
+//! library via P/Invoke (LibraryImport).
 //!
 //! ## Wire format
 //!
-//! Between Go and Rust we exchange **JSON**, not a custom binary. This
-//! keeps the FFI boundary tiny (four functions) and lets each side use
-//! its native JSON machinery.
+//! Between .NET and Rust we exchange **JSON**, not a custom binary. This
+//! keeps the FFI boundary tiny and lets each side use its native JSON
+//! machinery.
 //!
-//! Ktav's typed-integer and typed-float scalars do not map 1:1 onto JSON
-//! numbers (JSON cannot represent arbitrary-precision integers, and
-//! loses the `:i` / `:f` distinction). To keep round-trips lossless we
-//! use tagged wrappers:
+//! Ktav typed scalars do not map 1:1 onto JSON numbers. To keep
+//! round-trips lossless we use tagged wrappers:
 //!
 //! - `Value::Integer(s)` ⇄ `{"$i": "<digits>"}`
 //! - `Value::Float(s)`   ⇄ `{"$f": "<text>"}`
 //!
 //! Everything else maps to the obvious JSON shape (`null`, booleans,
 //! strings, arrays, objects). Object key order is preserved on both
-//! sides (`indexmap` here, `encoding/json` with `json.RawMessage` or an
-//! ordered map on the Go side).
+//! sides (`indexmap` here, `System.Text.Json` on the .NET side).
 //!
 //! ## C ABI
 //!
-//! Five functions, all use the same "caller-owned pointer, callee-owned
+//! Six functions, all use the same "caller-owned pointer, callee-owned
 //! buffer" pattern:
 //!
 //! - `ktav_loads(src, src_len, out_buf, out_len, out_err) -> i32`
 //! - `ktav_dumps(src, src_len, out_buf, out_len, out_err) -> i32`
 //! - `ktav_dumps_force_strings(src, src_len, out_buf, out_len, out_err) -> i32`
+//! - `ktav_emit_canonical(src, src_len, out_buf, out_len, out_err) -> i32`
 //! - `ktav_free(ptr, len)` — free a buffer returned by loads/dumps.
 //! - `ktav_version()` — NUL-terminated static string, for sanity checks.
 //!
@@ -224,6 +222,66 @@ pub unsafe extern "C" fn ktav_dumps_force_strings(
     }
 
     let text = match ktav::to_string_force_strings(&value) {
+        Ok(s) => s,
+        Err(e) => {
+            emit_err(e.to_string(), out_err, out_err_len);
+            return 1;
+        }
+    };
+
+    emit(text.into_bytes(), out_buf, out_len);
+    0
+}
+
+/// Render a Ktav document to its **canonical (normalised) form** as
+/// defined by spec § 5.9. The input is JSON (same schema as accepted by
+/// `ktav_dumps`); the output is canonical Ktav text. Parsing the output
+/// and calling `ktav_emit_canonical` again yields byte-identical output
+/// (idempotent).
+///
+/// # Safety
+/// Same as [`ktav_loads`].
+#[no_mangle]
+pub unsafe extern "C" fn ktav_emit_canonical(
+    src: *const u8,
+    src_len: usize,
+    out_buf: *mut *mut u8,
+    out_len: *mut usize,
+    out_err: *mut *mut c_char,
+    out_err_len: *mut usize,
+) -> c_int {
+    *out_buf = ptr::null_mut();
+    *out_len = 0;
+    *out_err = ptr::null_mut();
+    *out_err_len = 0;
+
+    let bytes = slice::from_raw_parts(src, src_len);
+    let wire: WireValue = match serde_json::from_slice(bytes) {
+        Ok(w) => w,
+        Err(e) => {
+            emit_err(format!("input JSON: {e}"), out_err, out_err_len);
+            return 1;
+        }
+    };
+
+    let value = match wire.into_value() {
+        Ok(v) => v,
+        Err(e) => {
+            emit_err(e, out_err, out_err_len);
+            return 1;
+        }
+    };
+
+    if !matches!(value, Value::Object(_) | Value::Array(_)) {
+        emit_err(
+            "top-level Ktav document must be an object or array".to_string(),
+            out_err,
+            out_err_len,
+        );
+        return 1;
+    }
+
+    let text = match ktav::emit_canonical(&value) {
         Ok(s) => s,
         Err(e) => {
             emit_err(e.to_string(), out_err, out_err_len);

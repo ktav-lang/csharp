@@ -11,10 +11,10 @@
 
     <!-- NuGet metadata -->
     <PackageId>Ktav</PackageId>
-    <Version>0.3.1</Version>
+    <Version>0.5.0</Version>
     <Authors>Marat K</Authors>
     <Description>.NET bindings for Ktav — a plain configuration format. Thin wrapper around the reference Rust parser via P/Invoke; no native build on the consumer side.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/ktav-lang/csharp</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

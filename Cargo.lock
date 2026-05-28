@@ -70,9 +70,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "ktav"
-version = "0.3.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f699da9f819bcfc09b449d45c509643b0cca15e882b7970f042a826eb52d1b"
+checksum = "520a2fb4f72224144303e7d21a8c97c7a89bfa0718e32213a0a2cc0ba4e0a635"
 dependencies = [
  "bumpalo",
  "compact_str",
@@ -85,7 +85,7 @@ dependencies = [
 
 [[package]]
 name = "ktav-cabi"
-version = "0.3.1"
+version = "0.5.0"
 dependencies = [
  "indexmap",
  "ktav",
