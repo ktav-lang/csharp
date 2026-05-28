@@ -170,7 +170,7 @@ public class BasicTests
         Assert.That(v, Is.InstanceOf<KtavObject>());
         Assert.That(((KtavObject)v).Entries, Is.Empty);
 
-        var v2 = Ktav.Loads("# just a comment\n# another\n");
+        var v2 = Ktav.Loads("## just a comment\n## another\n");
         Assert.That(v2, Is.InstanceOf<KtavObject>());
         Assert.That(((KtavObject)v2).Entries, Is.Empty);
     }
