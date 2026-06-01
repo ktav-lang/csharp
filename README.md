@@ -130,6 +130,19 @@ Typed integers and floats are held as **text** so arbitrary precision
 (digits beyond `long`) and exact decimal round-trip are preserved byte
 for byte across parse / render cycles.
 
+## Key escaping
+
+Since spec 0.6.0 a literal `.` or `:` inside a key segment is written
+with a backslash:
+
+```text
+a\.b: v        // key is the single segment "a.b" -> { "a.b": "v" }
+a\:b: v        // key contains a colon            -> { "a:b": "v" }
+x.y\.z: v      // split on the first dot only     -> { "x": { "y.z": "v" } }
+```
+
+A literal backslash in a key is `\\`.
+
 ## How the native library is resolved
 
 On `net8.0`, `NativeLoader` registers a

@@ -96,3 +96,10 @@ If you don't speak one of the languages, still open the PR in the
 language you do speak, mark the untouched versions with
 `<!-- TODO: sync with <name>.md -->` at the top, and a maintainer or
 community contributor will fill the gap before merge.
+
+### License of contributions
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in this project by you, as defined in the
+Apache-2.0 license, shall be dual-licensed as **MIT OR Apache-2.0**,
+without any additional terms or conditions.
