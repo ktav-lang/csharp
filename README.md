@@ -33,15 +33,15 @@ using Ktav;
 
 const string src = """
                    service: web
-                   port:i 8080
-                   ratio:f 0.75
+                   port: 8080
+                   ratio: 0.75
                    tls: true
                    tags: [
                        prod
                        eu-west-1
                    ]
                    db.host: primary.internal
-                   db.timeout:i 30
+                   db.timeout: 30
                    """;
 
 var top = (KtavObject)Ktav.Loads(src);
@@ -127,13 +127,13 @@ no lossy coercions:
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| `:i <digits>`    | `KtavInteger` (text form — `ToBigInteger()` / `ToInt64()`) |
-| `:f <number>`    | `KtavFloat` (text form — `ToDouble()`)                  |
-| bare scalar      | `KtavString`                                            |
+| bare integer     | `KtavInteger` (text form — `ToBigInteger()` / `ToInt64()`) |
+| bare decimal     | `KtavFloat` (text form — `ToDouble()`)                  |
+| other scalar     | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject` (key insertion order preserved)            |
 
-Typed integers and floats are held as **text** so arbitrary precision
+Integers and floats are held as **text** so arbitrary precision
 (digits beyond `long`) and exact decimal round-trip are preserved byte
 for byte across parse / render cycles.
 

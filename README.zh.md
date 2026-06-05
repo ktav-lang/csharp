@@ -32,15 +32,15 @@ using Ktav;
 
 const string src = """
                    service: web
-                   port:i 8080
-                   ratio:f 0.75
+                   port: 8080
+                   ratio: 0.75
                    tls: true
                    tags: [
                        prod
                        eu-west-1
                    ]
                    db.host: primary.internal
-                   db.timeout:i 30
+                   db.timeout: 30
                    """;
 
 var top = (KtavObject)Ktav.Loads(src);
@@ -125,13 +125,13 @@ string text = Ktav.Dumps(doc);
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| `:i <digits>`    | `KtavInteger`(文本形式 —— `ToBigInteger()` / `ToInt64()`) |
-| `:f <number>`    | `KtavFloat`(文本形式 —— `ToDouble()`)                   |
-| 裸 scalar        | `KtavString`                                            |
+| 裸整数           | `KtavInteger`(文本形式 —— `ToBigInteger()` / `ToInt64()`) |
+| 裸小数           | `KtavFloat`(文本形式 —— `ToDouble()`)                   |
+| 其他标量         | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject`(保留插入顺序)                             |
 
-带类型的整数与浮点数以 **文本** 保存,从而任意精度与十进制的精确表示
+整数与浮点数以 **文本** 保存,从而任意精度与十进制的精确表示
 都能在 parse / render 之间逐字节保持一致。
 
 ## 键的转义

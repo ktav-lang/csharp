@@ -33,15 +33,15 @@ using Ktav;
 
 const string src = """
                    service: web
-                   port:i 8080
-                   ratio:f 0.75
+                   port: 8080
+                   ratio: 0.75
                    tls: true
                    tags: [
                        prod
                        eu-west-1
                    ]
                    db.host: primary.internal
-                   db.timeout:i 30
+                   db.timeout: 30
                    """;
 
 var top = (KtavObject)Ktav.Loads(src);
@@ -126,13 +126,13 @@ string text = Ktav.Dumps(doc);
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| `:i <digits>`    | `KtavInteger` (текстовая форма — `ToBigInteger()` / `ToInt64()`) |
-| `:f <number>`    | `KtavFloat` (текстовая форма — `ToDouble()`)            |
-| scalar без маркера | `KtavString`                                          |
+| голое целое      | `KtavInteger` (текстовая форма — `ToBigInteger()` / `ToInt64()`) |
+| голое десятичное | `KtavFloat` (текстовая форма — `ToDouble()`)            |
+| прочий скаляр    | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject` (порядок вставки сохраняется)              |
 
-Типизированные целые и float хранятся **как текст**, чтобы произвольная
+Целые и float хранятся **как текст**, чтобы произвольная
 точность и точное представление десятичного числа побайтово сохранялись
 между циклами parse/render.
 
