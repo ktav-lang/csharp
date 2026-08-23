@@ -110,6 +110,7 @@ string text = Ktav.Dumps(doc);
 | 成员 | 用途 |
 | --- | --- |
 | `Ktav.Loads(string) -> KtavValue` | 将 Ktav 文档解析为 `KtavValue` 树。 |
+| `Ktav.LoadsStrict(string) -> KtavValue` | 使用严格数字词法检查解析文档。 |
 | `Ktav.Dumps(KtavValue) -> string` | 将 `KtavValue` 渲染为 Ktav 文本。顶层须为 `KtavObject`。 |
 | `Ktav.NativeVersion()` | 已加载 `ktav_cabi` 的版本字符串。 |
 | `Ktav.ExpectedNativeVersion` | 本次构建对应的预期版本。 |
@@ -136,7 +137,7 @@ string text = Ktav.Dumps(doc);
 
 ## 键的转义
 
-自 spec 0.6.0 起,键段内的字面量 `.` 或 `:` 通过反斜杠书写:
+自 spec 0.6.4 起,键段内的字面量 `.` 或 `:` 通过反斜杠书写:
 
 ```text
 a\.b: v        // 键是单个段 "a.b"        -> { "a.b": "v" }

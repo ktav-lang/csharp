@@ -45,6 +45,16 @@ public class BasicTests
     }
 
     [Test]
+    public void LoadsStrictChecksNumericSpelling()
+    {
+        Assert.Throws<KtavException>(() => Ktav.LoadsStrict("version: 1.10\n"));
+
+        var v = (KtavObject)Ktav.LoadsStrict("small: 1e-3\nlarge: 1e10\n");
+        Assert.That(v.TryGet("small"), Is.EqualTo(new KtavFloat("0.001")));
+        Assert.That(v.TryGet("large"), Is.EqualTo(new KtavFloat("10000000000.0")));
+    }
+
+    [Test]
     public void RoundTripSimpleDocument()
     {
         var entries = new List<KeyValuePair<string, KtavValue>>

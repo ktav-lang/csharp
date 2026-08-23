@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.4 —— 2026-08-23
+
+### 新增
+
+- **`Ktav.LoadsStrict(string)`** —— 通过 .NET 和 `ktav_loads_strict`
+  P/Invoke/C ABI 符号暴露 strict numeric parser。
+
+### 变更
+
+- 跟踪 `ktav 0.6.4` 与 spec 0.6.4，包括规范化 float 边界和
+  `notation_boundaries` fixture。
+- 原生库加载器现在指向精确的 `v0.6.4` release asset。
+
 **语言:** [English](CHANGELOG.md) · [Русский](CHANGELOG.ru.md) · **简体中文**
 
 NuGet 包 `Ktav` 的所有显著变更记录于此。格式:

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -18,13 +19,16 @@ public class TestPaths
     private static readonly string s_repo = Path.GetFullPath(
         Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", "..", ".."));
 
-    public static readonly string Cabi = Path.Combine(s_repo, "target", "release", CabiName());
+    public static readonly string Cabi = CabiPath();
     public static readonly string Spec = Path.Combine(s_repo, "spec", "versions", "0.6", "tests");
 
     [OneTimeSetUp]
     public void Setup()
     {
-        if (File.Exists(Cabi))
+        var overridePath = Environment.GetEnvironmentVariable("KTAV_LIB_PATH");
+        if (!string.IsNullOrEmpty(overridePath))
+            NativeLoader.SetLibraryPath(overridePath);
+        else if (File.Exists(Cabi))
             NativeLoader.SetLibraryPath(Cabi);
     }
 
@@ -36,6 +40,15 @@ public class TestPaths
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return "ktav_cabi.dll";
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return "libktav_cabi.dylib";
         return "libktav_cabi.so";
+    }
+
+    private static string CabiPath()
+    {
+        var target = Environment.GetEnvironmentVariable("CARGO_TARGET_DIR");
+        var basePath = string.IsNullOrEmpty(target)
+            ? Path.Combine(s_repo, "target")
+            : target;
+        return Path.Combine(basePath, "release", CabiName());
     }
 
     private static string SourceFile([CallerFilePath] string path = "") => path;

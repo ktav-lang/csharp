@@ -42,6 +42,17 @@ public static class Ktav
         return WireJson.Decode(output);
     }
 
+    /// <summary>Parse a Ktav document with strict numeric spelling checks.</summary>
+    /// <exception cref="KtavException">when strict parsing rejects the source.</exception>
+    public static KtavValue LoadsStrict(string src)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        NativeLoader.EnsureRegistered();
+        var bytes = Encoding.UTF8.GetBytes(src);
+        var output = CallNative(NativeOp.LoadsStrict, bytes);
+        return WireJson.Decode(output);
+    }
+
     /// <summary>
     /// Render a <see cref="KtavValue"/> back to Ktav text. The top-level
     /// value must be a <see cref="KtavObject"/> or <see cref="KtavArray"/>
@@ -127,7 +138,7 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private enum NativeOp { Loads, Dumps, DumpsForceStrings, EmitCanonical }
+    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical }
 
     private static byte[] CallNative(NativeOp op, byte[] input)
     {
@@ -150,6 +161,10 @@ public static class Ktav
             {
                 case NativeOp.Loads:
                     rc = NativeMethods.ktav_loads(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.LoadsStrict:
+                    rc = NativeMethods.ktav_loads_strict(inputPtr, (nuint)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
                 case NativeOp.Dumps:
@@ -177,6 +192,10 @@ public static class Ktav
             {
                 case NativeOp.Loads:
                     rc = NativeMethods.ktav_loads(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.LoadsStrict:
+                    rc = NativeMethods.ktav_loads_strict(inputPtr, (UIntPtr)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
                 case NativeOp.Dumps:

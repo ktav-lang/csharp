@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.4 — 2026-08-23
+
+### Добавлено
+
+- **`Ktav.LoadsStrict(string)`** — strict-парсер доступен через .NET и
+  символ `ktav_loads_strict` в P/Invoke/C ABI.
+
+### Изменено
+
+- Binding отслеживает `ktav 0.6.4` и spec 0.6.4, включая нормативную
+  границу канонической записи float и fixture `notation_boundaries`.
+- Загрузчик нативной библиотеки нацелен на точный asset релиза `v0.6.4`.
+
 **Языки:** [English](CHANGELOG.md) · **Русский** · [简体中文](CHANGELOG.zh.md)
 
 Все значимые изменения NuGet-пакета `Ktav` документируются здесь.

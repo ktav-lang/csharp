@@ -111,6 +111,7 @@ A complete runnable version lives in [`examples/Basic`](examples/Basic/Program.c
 | Member | Purpose |
 | --- | --- |
 | `Ktav.Loads(string) -> KtavValue` | Parse a Ktav document into the `KtavValue` tree. |
+| `Ktav.LoadsStrict(string) -> KtavValue` | Parse with strict numeric spelling checks. |
 | `Ktav.Dumps(KtavValue) -> string` | Render a `KtavValue` back as Ktav text. Top-level must be `KtavObject`. |
 | `Ktav.NativeVersion()` | Version string reported by the loaded `ktav_cabi`. |
 | `Ktav.ExpectedNativeVersion` | Version this build was compiled against. |
@@ -139,7 +140,7 @@ for byte across parse / render cycles.
 
 ## Key escaping
 
-Since spec 0.6.0 a literal `.` or `:` inside a key segment is written
+Since spec 0.6.4 a literal `.` or `:` inside a key segment is written
 with a backslash:
 
 ```text

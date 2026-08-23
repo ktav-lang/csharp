@@ -111,6 +111,7 @@ string text = Ktav.Dumps(doc);
 | Член | Назначение |
 | --- | --- |
 | `Ktav.Loads(string) -> KtavValue` | Разобрать Ktav-документ в дерево `KtavValue`. |
+| `Ktav.LoadsStrict(string) -> KtavValue` | Разобрать документ со строгой проверкой записи чисел. |
 | `Ktav.Dumps(KtavValue) -> string` | Отрендерить `KtavValue` в Ktav-текст. Верхний уровень — `KtavObject`. |
 | `Ktav.NativeVersion()` | Версия загруженного `ktav_cabi`. |
 | `Ktav.ExpectedNativeVersion` | Версия, под которую собран этот пакет. |
@@ -138,7 +139,7 @@ string text = Ktav.Dumps(doc);
 
 ## Экранирование в ключах
 
-Начиная со spec 0.6.0 литеральные `.` или `:` внутри сегмента ключа
+Начиная со spec 0.6.4 литеральные `.` или `:` внутри сегмента ключа
 записываются через backslash:
 
 ```text
