@@ -46,3 +46,6 @@ desktop.ini
 
 # Local drafts
 docs_local/
+
+# /wrush task worktrees — always created here, in-tree
+/worktrees/
