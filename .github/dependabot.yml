@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Cargo.lock is committed here (unlike the other five bindings) so the
+  # cdylib build is reproducible. `ktav = "0.7"` in Cargo.toml already
+  # permits any 0.7.x patch, but a committed lock freezes whatever patch
+  # was resolved when it was last generated — it won't move on its own
+  # when a newer 0.7.x ships. This keeps the pin moving on a schedule,
+  # via a reviewable PR, instead of drifting silently or requiring a
+  # manual `cargo update -p ktav`.
+  #
+  # `ktav` is restricted to patch-level bumps: the spec submodule is
+  # pinned to v0.7.0 (see .gitmodules / Cargo.toml `ktav = "0.7"`), and a
+  # minor/major bump is a deliberate, reviewed decision made alongside a
+  # spec version bump — not something a scheduled job should propose.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "ktav"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
