@@ -279,4 +279,88 @@ public class BasicTests
     {
         Assert.Throws<System.ArgumentNullException>(() => Ktav.Dumps(null!));
     }
+
+    [Test]
+    public void LoadsQuotedKey()
+    {
+        // Spec 0.7.0 § 5.3.3: quoted keys — delimiters stripped, interior
+        // content verbatim; quotes do not split paths or act as separators.
+        var src = """
+                  "a.b": 1
+                  'c:d': 2
+                  `e{f} [g]`: 3
+                  """;
+
+        var v = Ktav.Loads(src);
+        var top = (KtavObject)v;
+
+        Assert.That(top.TryGet("a.b"), Is.EqualTo(new KtavInteger("1")));
+        Assert.That(top.TryGet("c:d"), Is.EqualTo(new KtavInteger("2")));
+        Assert.That(top.TryGet("e{f} [g]"), Is.EqualTo(new KtavInteger("3")));
+    }
+
+    [Test]
+    public void QuotesInValuePositionStayLiteral()
+    {
+        // Spec 0.7.0 § 5.3.3: quoting applies to keys only; a quote in a
+        // VALUE position is ordinary content (no JSON-style value quoting).
+        var v = Ktav.Loads("a: \"b\"\n");
+        var top = (KtavObject)v;
+        var s = (KtavString)top.TryGet("a")!;
+
+        Assert.That(s.Value, Is.EqualTo("\"b\""));
+    }
+
+    [Test]
+    public void RoundTripsQuotedKey()
+    {
+        // Spec 0.7.0 § 5.3.3: the writer escapes or quotes the dot; either
+        // spelling must decode back to a single "a.b" segment.
+        var entries = new[]
+        {
+            new KeyValuePair<string, KtavValue>("a.b", new KtavString("v")),
+        };
+        var text = Ktav.Dumps(new KtavObject(entries));
+        Assert.That(text, Is.Not.Empty);
+
+        var back = (KtavObject)Ktav.Loads(text);
+        Assert.That(back.TryGet("a.b"), Is.EqualTo(new KtavString("v")));
+    }
+
+    [Test]
+    public void LoadsUnicodeEscapeInInlineCompound()
+    {
+        // Spec 0.7.0 § 3.7/§ 3.7.1: \uXXXX is processed in inline scalar
+        // values — the body of a pair inside an inline compound — and in
+        // keys. Exactly four hex digits are consumed (case-insensitive);
+        // astral code points ride a UTF-16 surrogate pair.
+        var src = "k: {ascii: \\u0041BC, lower: caf\\u00e9, emoji: \\uD83D\\uDE00}\n";
+        var v = Ktav.Loads(src);
+        var top = (KtavObject)v;
+        var k = (KtavObject)top.TryGet("k")!;
+
+        Assert.That(k.TryGet("ascii"), Is.EqualTo(new KtavString("ABC")));
+        Assert.That(k.TryGet("lower"), Is.EqualTo(new KtavString("caf\u00E9")));
+        Assert.That(k.TryGet("emoji"), Is.EqualTo(new KtavString("\U0001F600")));
+    }
+
+    [Test]
+    public void BarePairValueKeepsUnicodeEscapeLiteral()
+    {
+        // § 3.7 scopes escapes to inline-compound bodies and keys; a bare
+        // multi-line pair value processes NO escapes, so \uXXXX stays literal.
+        var src = "ascii: \\u0041BC\n";
+        var v = Ktav.Loads(src);
+        var top = (KtavObject)v;
+
+        Assert.That(top.TryGet("ascii"), Is.EqualTo(new KtavString("\\u0041BC")));
+    }
+
+    [Test]
+    public void RejectsLoneSurrogateEscape()
+    {
+        // Spec 0.7.0 § 3.7.1/§ 6.13: a lone surrogate is BadEscapeSequence
+        // (escape-aware context: inline compound body).
+        Assert.Throws<KtavException>(() => Ktav.Loads("k: {bad: \\uD83D}\n"));
+    }
 }
