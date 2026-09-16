@@ -19,19 +19,24 @@
 //!
 //! ## C ABI
 //!
-//! Seven functions, all use the same "caller-owned pointer, callee-owned
-//! buffer" pattern:
+//! Eight functions; the six output functions all use the same
+//! "caller-owned pointer, callee-owned buffer" pattern:
 //!
-//! - `ktav_loads(src, src_len, out_buf, out_len, out_err) -> i32`
-//! - `ktav_loads_strict(src, src_len, out_buf, out_len, out_err) -> i32`
-//! - `ktav_dumps(src, src_len, out_buf, out_len, out_err) -> i32`
-//! - `ktav_dumps_force_strings(src, src_len, out_buf, out_len, out_err) -> i32`
-//! - `ktav_emit_canonical(src, src_len, out_buf, out_len, out_err) -> i32`
-//! - `ktav_free(ptr, len)` — free a buffer returned by loads/dumps.
+//! - `ktav_loads(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_loads_strict(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_dumps(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_dumps_force_strings(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_emit_canonical(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_format(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_free(ptr, len)` — free a buffer returned by loads/dumps/format.
 //! - `ktav_version()` — NUL-terminated static string, for sanity checks.
 //!
 //! Return code: `0` on success, `1` on error. On error, `out_err` holds
-//! a UTF-8 error message and must still be freed via `ktav_free`.
+//! the structured error envelope as UTF-8 JSON — one nine-field object
+//! `error, reason, line, line_text, span, path, body, canonical,
+//! spec_section` in that exact order, built by `ktav::ErrorEnvelope`
+//! (issue rust#12). Both the success and the error buffer are freed via
+//! `ktav_free`.
 
 use std::os::raw::{c_char, c_int};
 use std::ptr;
@@ -54,6 +59,8 @@ unsafe fn emit(buf: Vec<u8>, out_buf: *mut *mut u8, out_len: *mut usize) {
     *out_len = len;
 }
 
+/// Ship the envelope JSON through the error channel as raw bytes.
+#[inline]
 unsafe fn emit_err(msg: String, out_err: *mut *mut c_char, out_err_len: *mut usize) {
     let bytes = msg.into_bytes();
     let mut boxed = bytes.into_boxed_slice();
@@ -64,7 +71,35 @@ unsafe fn emit_err(msg: String, out_err: *mut *mut c_char, out_err_len: *mut usi
     *out_err_len = len;
 }
 
-/// Parse a Ktav document. Returns JSON bytes on success, error message on
+/// Ship `err` through the error channel as the structured envelope.
+/// `source` is the Ktav document text the error refers to ("" when the
+/// input was not Ktav text) so `line_text` can be populated.
+unsafe fn emit_error(
+    err: &ktav::Error,
+    source: &str,
+    out_err: *mut *mut c_char,
+    out_err_len: *mut usize,
+) {
+    emit_err(
+        ktav::ErrorEnvelope::from_error(err, source).to_json(),
+        out_err,
+        out_err_len,
+    );
+}
+
+/// Uniformity rule (issue rust#12): every error leaving the ABI is an
+/// envelope. Free-form text that carries no `ktav::Error` is wrapped as
+/// `Error::Message` so hosts never have to sniff JSON vs plain text.
+unsafe fn emit_message(
+    message: String,
+    source: &str,
+    out_err: *mut *mut c_char,
+    out_err_len: *mut usize,
+) {
+    emit_error(&ktav::Error::Message(message), source, out_err, out_err_len);
+}
+
+/// Parse a Ktav document. Returns JSON bytes on success, error envelope on
 /// failure. Caller frees both via `ktav_free`.
 ///
 /// # Safety
@@ -87,8 +122,11 @@ pub unsafe extern "C" fn ktav_loads(
     let input = match std::str::from_utf8(slice::from_raw_parts(src, src_len)) {
         Ok(s) => s,
         Err(e) => {
-            emit_err(
+            // We refused to decode the bytes; deriving line_text from
+            // them would be dishonest, so no source is attached.
+            emit_message(
                 format!("input is not valid UTF-8: {e}"),
+                "",
                 out_err,
                 out_err_len,
             );
@@ -99,7 +137,7 @@ pub unsafe extern "C" fn ktav_loads(
     let value = match ktav::parse(input) {
         Ok(v) => v,
         Err(e) => {
-            emit_err(e.to_string(), out_err, out_err_len);
+            emit_error(&e, input, out_err, out_err_len);
             return 1;
         }
     };
@@ -108,7 +146,12 @@ pub unsafe extern "C" fn ktav_loads(
     let bytes = match serde_json::to_vec(&json) {
         Ok(b) => b,
         Err(e) => {
-            emit_err(format!("internal: encode JSON: {e}"), out_err, out_err_len);
+            emit_message(
+                format!("internal: encode JSON: {e}"),
+                input,
+                out_err,
+                out_err_len,
+            );
             return 1;
         }
     };
@@ -118,7 +161,7 @@ pub unsafe extern "C" fn ktav_loads(
 }
 
 /// Parse a Ktav document with strict numeric spelling checks. Returns JSON
-/// bytes on success, error message on failure. Caller frees both via
+/// bytes on success, error envelope on failure. Caller frees both via
 /// `ktav_free`.
 ///
 /// # Safety
@@ -140,8 +183,9 @@ pub unsafe extern "C" fn ktav_loads_strict(
     let input = match std::str::from_utf8(slice::from_raw_parts(src, src_len)) {
         Ok(s) => s,
         Err(e) => {
-            emit_err(
+            emit_message(
                 format!("input is not valid UTF-8: {e}"),
+                "",
                 out_err,
                 out_err_len,
             );
@@ -152,7 +196,7 @@ pub unsafe extern "C" fn ktav_loads_strict(
     let value = match ktav::parse_strict(input) {
         Ok(v) => v,
         Err(e) => {
-            emit_err(e.to_string(), out_err, out_err_len);
+            emit_error(&e, input, out_err, out_err_len);
             return 1;
         }
     };
@@ -161,7 +205,12 @@ pub unsafe extern "C" fn ktav_loads_strict(
     let bytes = match serde_json::to_vec(&json) {
         Ok(b) => b,
         Err(e) => {
-            emit_err(format!("internal: encode JSON: {e}"), out_err, out_err_len);
+            emit_message(
+                format!("internal: encode JSON: {e}"),
+                input,
+                out_err,
+                out_err_len,
+            );
             return 1;
         }
     };
@@ -193,7 +242,7 @@ pub unsafe extern "C" fn ktav_dumps(
     let wire: WireValue = match serde_json::from_slice(bytes) {
         Ok(w) => w,
         Err(e) => {
-            emit_err(format!("input JSON: {e}"), out_err, out_err_len);
+            emit_message(format!("input JSON: {e}"), "", out_err, out_err_len);
             return 1;
         }
     };
@@ -201,14 +250,15 @@ pub unsafe extern "C" fn ktav_dumps(
     let value = match wire.into_value() {
         Ok(v) => v,
         Err(e) => {
-            emit_err(e, out_err, out_err_len);
+            emit_message(e, "", out_err, out_err_len);
             return 1;
         }
     };
 
     if !matches!(value, Value::Object(_) | Value::Array(_)) {
-        emit_err(
+        emit_message(
             "top-level Ktav document must be an object or array".to_string(),
+            "",
             out_err,
             out_err_len,
         );
@@ -218,7 +268,7 @@ pub unsafe extern "C" fn ktav_dumps(
     let text = match ktav::render::render(&value) {
         Ok(s) => s,
         Err(e) => {
-            emit_err(e.to_string(), out_err, out_err_len);
+            emit_error(&e, "", out_err, out_err_len);
             return 1;
         }
     };
@@ -253,7 +303,7 @@ pub unsafe extern "C" fn ktav_dumps_force_strings(
     let wire: WireValue = match serde_json::from_slice(bytes) {
         Ok(w) => w,
         Err(e) => {
-            emit_err(format!("input JSON: {e}"), out_err, out_err_len);
+            emit_message(format!("input JSON: {e}"), "", out_err, out_err_len);
             return 1;
         }
     };
@@ -261,14 +311,15 @@ pub unsafe extern "C" fn ktav_dumps_force_strings(
     let value = match wire.into_value() {
         Ok(v) => v,
         Err(e) => {
-            emit_err(e, out_err, out_err_len);
+            emit_message(e, "", out_err, out_err_len);
             return 1;
         }
     };
 
     if !matches!(value, Value::Object(_) | Value::Array(_)) {
-        emit_err(
+        emit_message(
             "top-level Ktav document must be an object or array".to_string(),
+            "",
             out_err,
             out_err_len,
         );
@@ -278,7 +329,7 @@ pub unsafe extern "C" fn ktav_dumps_force_strings(
     let text = match ktav::to_string_force_strings(&value) {
         Ok(s) => s,
         Err(e) => {
-            emit_err(e.to_string(), out_err, out_err_len);
+            emit_error(&e, "", out_err, out_err_len);
             return 1;
         }
     };
@@ -313,7 +364,7 @@ pub unsafe extern "C" fn ktav_emit_canonical(
     let wire: WireValue = match serde_json::from_slice(bytes) {
         Ok(w) => w,
         Err(e) => {
-            emit_err(format!("input JSON: {e}"), out_err, out_err_len);
+            emit_message(format!("input JSON: {e}"), "", out_err, out_err_len);
             return 1;
         }
     };
@@ -321,14 +372,15 @@ pub unsafe extern "C" fn ktav_emit_canonical(
     let value = match wire.into_value() {
         Ok(v) => v,
         Err(e) => {
-            emit_err(e, out_err, out_err_len);
+            emit_message(e, "", out_err, out_err_len);
             return 1;
         }
     };
 
     if !matches!(value, Value::Object(_) | Value::Array(_)) {
-        emit_err(
+        emit_message(
             "top-level Ktav document must be an object or array".to_string(),
+            "",
             out_err,
             out_err_len,
         );
@@ -338,7 +390,7 @@ pub unsafe extern "C" fn ktav_emit_canonical(
     let text = match ktav::emit_canonical(&value) {
         Ok(s) => s,
         Err(e) => {
-            emit_err(e.to_string(), out_err, out_err_len);
+            emit_error(&e, "", out_err, out_err_len);
             return 1;
         }
     };
@@ -347,8 +399,68 @@ pub unsafe extern "C" fn ktav_emit_canonical(
     0
 }
 
-/// Free a buffer returned by `ktav_loads` / `ktav_dumps` (success or
-/// error). `ptr`/`len` is a no-op when null/zero.
+/// Format Ktav **source text** (not JSON — contrast with
+/// `ktav_emit_canonical`, which takes the JSON wire value; no
+/// deserialization happens here) into its canonical layout.
+///
+/// Semantics (settled upstream):
+/// - every comment is preserved verbatim (spec § 3.4: a comment owns a
+///   whole line, so attachment is unambiguous);
+/// - blank lines survive as a grouping hint, but a run of two or more
+///   collapses to exactly one, and blank padding immediately inside a
+///   bracket is dropped — which makes the transform a fixed point
+///   (`format(format(x)) == format(x)`);
+/// - key order is never changed (§ 5.9 has no sorting rule);
+/// - for a document with no comments AND no blank lines the result
+///   equals `ktav_emit_canonical` of its parse.
+///
+/// Both the success and the error buffer are freed via `ktav_free`.
+///
+/// # Safety
+/// Same as [`ktav_loads`].
+#[no_mangle]
+pub unsafe extern "C" fn ktav_format(
+    src: *const u8,
+    src_len: usize,
+    out_buf: *mut *mut u8,
+    out_len: *mut usize,
+    out_err: *mut *mut c_char,
+    out_err_len: *mut usize,
+) -> c_int {
+    *out_buf = ptr::null_mut();
+    *out_len = 0;
+    *out_err = ptr::null_mut();
+    *out_err_len = 0;
+
+    let text = match std::str::from_utf8(slice::from_raw_parts(src, src_len)) {
+        Ok(s) => s,
+        Err(e) => {
+            emit_message(
+                format!("input is not valid UTF-8: {e}"),
+                "",
+                out_err,
+                out_err_len,
+            );
+            return 1;
+        }
+    };
+
+    match ktav::format_str(text) {
+        Ok(formatted) => {
+            emit(formatted.into_bytes(), out_buf, out_len);
+            0
+        }
+        Err(e) => {
+            emit_error(&e, text, out_err, out_err_len);
+            1
+        }
+    }
+}
+
+/// Free a buffer returned by any of the output functions — `ktav_loads`,
+/// `ktav_loads_strict`, `ktav_dumps`, `ktav_dumps_force_strings`,
+/// `ktav_emit_canonical`, and `ktav_format` — success or error.
+/// `ptr`/`len` is a no-op when null/zero.
 ///
 /// # Safety
 /// Must be called exactly once per returned buffer with the same length
@@ -547,5 +659,199 @@ impl<'de> Deserialize<'de> for WireValue {
         }
 
         d.deserialize_any(V)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type AbiFn = unsafe extern "C" fn(
+        *const u8,
+        usize,
+        *mut *mut u8,
+        *mut usize,
+        *mut *mut c_char,
+        *mut usize,
+    ) -> c_int;
+
+    struct Raw {
+        rc: c_int,
+        out: Option<String>,
+        err: Option<String>,
+    }
+
+    /// SAFETY: `f` is one of this crate's ABI functions; `bytes` lives
+    /// for the whole call; all out pointers are valid locals; returned
+    /// buffers are copied out and freed via `ktav_free` before returning.
+    fn call_raw(f: AbiFn, bytes: &[u8]) -> Raw {
+        let mut out_buf: *mut u8 = ptr::null_mut();
+        let mut out_len: usize = 0;
+        let mut out_err: *mut c_char = ptr::null_mut();
+        let mut out_err_len: usize = 0;
+        // SAFETY: `f` is one of this crate's ABI functions; `bytes`
+        // outlives the call; all out pointers are valid locals.
+        let rc = unsafe {
+            f(
+                bytes.as_ptr(),
+                bytes.len(),
+                &mut out_buf,
+                &mut out_len,
+                &mut out_err,
+                &mut out_err_len,
+            )
+        };
+        let out = if !out_buf.is_null() {
+            // SAFETY: the callee allocated exactly out_len bytes.
+            Some(unsafe {
+                let s = String::from_utf8(slice::from_raw_parts(out_buf, out_len).to_vec())
+                    .expect("output is UTF-8");
+                ktav_free(out_buf, out_len);
+                s
+            })
+        } else {
+            assert_eq!(out_len, 0);
+            None
+        };
+        let err = if !out_err.is_null() {
+            // SAFETY: the callee allocated exactly out_err_len bytes.
+            Some(unsafe {
+                let s = String::from_utf8(
+                    slice::from_raw_parts(out_err as *const u8, out_err_len).to_vec(),
+                )
+                .expect("error payload is UTF-8");
+                ktav_free(out_err as *mut u8, out_err_len);
+                s
+            })
+        } else {
+            assert_eq!(out_err_len, 0);
+            None
+        };
+        Raw { rc, out, err }
+    }
+
+    fn call(f: AbiFn, bytes: &[u8]) -> Result<String, String> {
+        let raw = call_raw(f, bytes);
+        if raw.rc == 0 {
+            Ok(raw.out.expect("success must fill out_buf"))
+        } else {
+            assert!(raw.out.is_none(), "out_buf must stay null on error");
+            Err(raw.err.expect("error must fill out_err"))
+        }
+    }
+
+    fn envelope(msg: &str) -> serde_json::Map<String, Json> {
+        match serde_json::from_str::<Json>(msg) {
+            Ok(Json::Object(m)) => m,
+            other => panic!("error payload is not a JSON object: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn format_keeps_comments_and_is_fixed_point() {
+        let doc = "## header comment\n\
+                   ## second comment\n\
+                   \n\
+                   \n\
+                   \n\
+                   alpha: 1\n\
+                   beta: [\n\
+                   \n\
+                   inner: 2\n\
+                   other: 3\n\
+                   ]\n\
+                   gamma: -5.5\n\
+                   delta: -7\n\
+                   ## trailing comment\n";
+        // SAFETY: pure test call into the ABI with valid locals.
+        let once = call(ktav_format, doc.as_bytes()).expect("format succeeds");
+        for c in [
+            "## header comment",
+            "## second comment",
+            "## trailing comment",
+        ] {
+            assert!(
+                once.lines().any(|l| l == c),
+                "comment {c:?} missing from output"
+            );
+        }
+        assert!(
+            !once.contains("\n\n\n"),
+            "blank run must collapse: {once:?}"
+        );
+        // SAFETY: same as above, on previously formatted output.
+        let twice = call(ktav_format, once.as_bytes()).expect("re-format succeeds");
+        assert_eq!(once, twice, "format must be a fixed point");
+    }
+
+    #[test]
+    fn format_matches_canonical_when_no_comments_or_blanks() {
+        let text = "outer.inner: 1\n\
+                    outer.list: [2, 3]\n\
+                    inline: [a: x, b: y]\n\
+                    neg: -42\n\
+                    fl: 2.5\n";
+        // SAFETY: pure test call into the ABI with valid locals.
+        let via_abi = call(ktav_format, text.as_bytes()).expect("format succeeds");
+        let canonical = ktav::emit_canonical(&ktav::parse(text).unwrap()).unwrap();
+        assert_eq!(via_abi, canonical);
+    }
+
+    #[test]
+    fn format_error_surfaces_structured_envelope() {
+        // SAFETY: pure test call into the ABI with valid locals.
+        let raw = call_raw(ktav_format, b"a: [");
+        assert_eq!(raw.rc, 1);
+        assert!(raw.out.is_none(), "out_buf must stay null on error");
+        let env = envelope(raw.err.as_deref().expect("error payload"));
+        let keys: Vec<&str> = env.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            [
+                "error",
+                "reason",
+                "line",
+                "line_text",
+                "span",
+                "path",
+                "body",
+                "canonical",
+                "spec_section"
+            ]
+        );
+        assert!(!env["error"].as_str().unwrap().is_empty());
+        // Observed behaviour: for an unclosed inline compound the
+        // envelope carries the span but `line` stays null.
+        assert!(env["line"].is_null());
+        assert_eq!(env["line_text"], "a: [");
+        let span = env["span"].as_object().expect("span is an object");
+        assert!(span["start"].is_number() && span["end"].is_number());
+        assert!(env["reason"].is_null());
+        assert!(env["path"].is_null());
+    }
+
+    #[test]
+    fn loads_error_is_envelope_too() {
+        // SAFETY: pure test call into the ABI with valid locals.
+        let msg = call(ktav_loads, b"a: [").expect_err("must fail");
+        let env = envelope(&msg);
+        assert!(env.contains_key("error"), "not an envelope: {msg:?}");
+    }
+
+    #[test]
+    fn message_errors_come_out_as_envelope() {
+        // SAFETY: pure test call into the ABI with valid locals.
+        let msg = call(ktav_dumps, b"{not json").expect_err("must fail");
+        let env = envelope(&msg);
+        assert_eq!(env["error"], "Message");
+    }
+
+    #[test]
+    fn format_rejects_invalid_utf8_as_envelope() {
+        // SAFETY: pure test call into the ABI with valid locals.
+        let msg = call(ktav_format, &[0xFF, 0xFE]).expect_err("must fail");
+        let env = envelope(&msg);
+        assert_eq!(env["error"], "Message");
+        assert!(env["line"].is_null());
     }
 }

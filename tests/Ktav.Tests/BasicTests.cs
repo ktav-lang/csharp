@@ -111,6 +111,86 @@ public class BasicTests
     }
 
     [Test]
+    public void FormatPreservesCommentsAndIsFixedPoint()
+    {
+        var src = """
+                  ## header comment
+                  alpha: 1
+
+
+                  beta: 2
+                  gamma: [
+                      ## blank padding inside a bracket follows
+
+                      inner
+                  ]
+                  delta: {
+                      ## nested comment
+                      x: 1
+                  }
+                  ## trailing comment
+                  """;
+
+        var formatted = Ktav.Format(src);
+
+        var outLines = formatted.Split('\n');
+        foreach (var comment in new[] { "## header comment", "## nested comment", "## trailing comment" })
+            Assert.That(outLines, Has.Some.Matches<string>(l => l.Trim() == comment),
+                "comment must survive verbatim as a whole line");
+
+        Assert.That(formatted, Does.Not.Contain("\n\n\n"),
+            "runs of blank lines collapse to exactly one");
+
+        Assert.That(Ktav.Format(formatted), Is.EqualTo(formatted),
+            "Format must be a fixed point");
+    }
+
+    [Test]
+    public void FormatMatchesCanonicalForPlainDocument()
+    {
+        var src = """
+                  service.web.port: 8080
+                  ratio: 0.75
+                  offset: -42
+                  tags: [prod, eu-west-1]
+                  db: {host: primary}
+                  """;
+
+        var formatted = System.Text.Encoding.UTF8.GetBytes(Ktav.Format(src));
+        var canonical = System.Text.Encoding.UTF8.GetBytes(
+            Ktav.EmitCanonical(Ktav.Loads(src)));
+        Assert.That(formatted, Is.EqualTo(canonical));
+    }
+
+    [Test]
+    public void FormatErrorSurfacesStructuredFields()
+    {
+        var ex = Assert.Throws<KtavException>(() => Ktav.Format("a: ["));
+        Assert.That(ex!.Error, Is.Not.Empty);
+        Assert.That(ex.LineText, Is.EqualTo("a: ["));
+        Assert.That(ex.Span, Is.Not.Null);
+        Assert.That(ex.Reason, Is.Null);
+        Assert.That(ex.SpecSection, Is.EqualTo("§6.1"));
+        StringAssert.DoesNotContain("\"error\"", ex.Message);
+        Assert.That(ex.Message.TrimStart(), Does.Not.StartWith("{"));
+    }
+
+    [Test]
+    public void LoadsErrorSurfacesStructuredFields()
+    {
+        var ex = Assert.Throws<KtavException>(() => Ktav.Loads("a: ["));
+        Assert.That(ex!.Error, Is.Not.Empty);
+        Assert.That(ex.LineText, Is.EqualTo("a: ["));
+        Assert.That(ex.Message.TrimStart(), Does.Not.StartWith("{"));
+    }
+
+    [Test]
+    public void FormatNullArgumentThrowsAne()
+    {
+        Assert.Throws<System.ArgumentNullException>(() => Ktav.Format(null!));
+    }
+
+    [Test]
     public void DumpsAcceptsTopLevelArray()
     {
         // spec 0.5.0 § 5.0.1: a top-level Array renders as bare

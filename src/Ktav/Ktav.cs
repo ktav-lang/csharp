@@ -121,6 +121,32 @@ public static class Ktav
     }
 
     /// <summary>
+    /// Reformat <paramref name="src"/> — the Ktav source text itself,
+    /// not a parsed value (contrast with <see cref="EmitCanonical"/>,
+    /// which takes a <see cref="KtavValue"/>) — into the document's
+    /// canonical layout while preserving every comment verbatim (spec
+    /// § 3.4: a comment owns a whole line, so attachment is unambiguous).
+    /// Blank lines survive as a grouping hint, but runs of two or more
+    /// collapse to exactly one, and blank padding immediately inside a
+    /// bracket is dropped — the transform is a fixed point:
+    /// <c>Format(Format(x)) == Format(x)</c>. Key order is never changed
+    /// (spec § 5.9 has no sorting rule). For a document with no comments
+    /// and no blank lines the output equals
+    /// <c>EmitCanonical(Loads(src))</c>.
+    /// </summary>
+    /// <param name="src">Ktav source text to reformat.</param>
+    /// <returns>The canonically formatted Ktav source text.</returns>
+    /// <exception cref="KtavException">on any format error.</exception>
+    public static string Format(string src)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        NativeLoader.EnsureRegistered();
+        var bytes = Encoding.UTF8.GetBytes(src);
+        var output = CallNative(NativeOp.Format, bytes);
+        return Encoding.UTF8.GetString(output);
+    }
+
+    /// <summary>
     /// Version of the loaded <c>ktav_cabi</c>. Useful for sanity checks
     /// against <see cref="ExpectedNativeVersion"/>.
     /// </summary>
@@ -138,7 +164,7 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical }
+    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format }
 
     private static byte[] CallNative(NativeOp op, byte[] input)
     {
@@ -179,6 +205,10 @@ public static class Ktav
                     rc = NativeMethods.ktav_emit_canonical(inputPtr, (nuint)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
+                case NativeOp.Format:
+                    rc = NativeMethods.ktav_format(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
                 default:
                     throw new InvalidOperationException("unknown native op: " + op);
             }
@@ -210,6 +240,10 @@ public static class Ktav
                     rc = NativeMethods.ktav_emit_canonical(inputPtr, (UIntPtr)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
+                case NativeOp.Format:
+                    rc = NativeMethods.ktav_format(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
                 default:
                     throw new InvalidOperationException("unknown native op: " + op);
             }
@@ -217,12 +251,13 @@ public static class Ktav
 
             if (rc != 0)
             {
-                var msg = CopyAndFree(outErr, outErrLen);
-                if (msg.Length == 0) msg = "native call failed with code " + rc;
+                var payload = CopyBytesAndFree(outErr, outErrLen);
                 // Drain success buffer too, just in case the native side
                 // populated both — real cabi never does, defence in depth.
                 FreeIfPresent(outBuf, outLen);
-                throw new KtavException(msg);
+                if (payload.Length == 0)
+                    throw new KtavException("native call failed with code " + rc);
+                throw KtavException.FromEnvelope(payload);
             }
 
             // Success path: native side may still have written an error
@@ -238,12 +273,6 @@ public static class Ktav
     }
 
 #if NET8_0_OR_GREATER
-    private static string CopyAndFree(IntPtr ptr, nuint len)
-    {
-        var bytes = CopyBytesAndFree(ptr, len);
-        return bytes.Length == 0 ? string.Empty : Encoding.UTF8.GetString(bytes);
-    }
-
     private static byte[] CopyBytesAndFree(IntPtr ptr, nuint len)
     {
         if (ptr == IntPtr.Zero || len == 0) return Array.Empty<byte>();
@@ -266,12 +295,6 @@ public static class Ktav
         if (ptr != IntPtr.Zero) NativeMethods.ktav_free(ptr, len);
     }
 #else
-    private static string CopyAndFree(IntPtr ptr, UIntPtr len)
-    {
-        var bytes = CopyBytesAndFree(ptr, len);
-        return bytes.Length == 0 ? string.Empty : Encoding.UTF8.GetString(bytes);
-    }
-
     private static byte[] CopyBytesAndFree(IntPtr ptr, UIntPtr len)
     {
         if (ptr == IntPtr.Zero || (ulong)len == 0) return Array.Empty<byte>();
