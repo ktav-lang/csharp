@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Conformance runner: the spec 0.7 fixture categories
+  `unrepresentable/` (writer must refuse — currently 5 `.json` inputs)
+  and `parseable-unrepresentable/` (parses fine, canonical emit must
+  refuse — 4 fixtures) now execute and assert. A guard test hard-fails
+  when the spec submodule is not checked out, when an unknown fixture
+  category directory appears, or when any category is empty.
+- API smoke tests for 0.7 behaviours: quoted keys (§ 5.3.3), quote
+  characters staying literal in value position, `\uXXXX` escapes in
+  inline-compound values (§ 3.7.1) including lone-surrogate rejection
+  (§ 6.13) and the bare-pair-value literal behaviour (§ 3.7 scope).
+
+### Changed
+
+- Tracks `ktav 0.7` and spec 0.7.0 — quoted keys (§ 5.3.3), `\uXXXX`
+  unicode escapes (§ 3.7.1), the exhaustively enumerated whitespace set
+  (§ 3.3), and the new error categories of §§ 6.11–6.16. No public API
+  changes: Rust errors still cross the boundary as message strings.
+- Rust MSRV raised to 1.71 (ktav 0.7's MSRV).
+
+### Fixed
+
+- Conformance: the test repo-root derivation was off by one directory
+  and could silently target a sibling `spec` checkout — or, in CI and
+  worktrees, run zero fixture tests while staying green. The runner now
+  resolves this repo's own submodule. Invalid-UTF-8 fixtures (§ 6.15)
+  are exercised through the byte-level native entry point instead of
+  lossy text decoding that hid the defect.
+
 ## 0.6.4 — 2026-08-23
 
 ### Added
