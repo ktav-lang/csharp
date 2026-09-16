@@ -70,9 +70,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "ktav"
-version = "0.6.4"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1504089feedb8cf7abbf9d90782c007066e7c010c760eb94b23178ed6aeaf18e"
+checksum = "2365f59e6488368d22498648821f8868f12566d96d33269a6f690a24d45ab43c"
 dependencies = [
  "bumpalo",
  "compact_str",
