@@ -14,7 +14,10 @@ namespace Ktav.Tests;
 /// Walks the Ktav spec conformance suite and replays every fixture
 /// against the loaded native parser across four fixture categories:
 /// <list type="bullet">
-/// <item><c>valid</c> — parses, compared against a plain-JSON oracle.</item>
+/// <item><c>valid</c> — parses, compared against a plain-JSON oracle;
+/// each fixture's <c>.canonical.ktav</c> companion is also checked
+/// byte-for-byte against <c>EmitCanonical</c>'s output (spec § 5.9.10,
+/// § 5.9.8).</item>
 /// <item><c>invalid</c> — must fail to parse.</item>
 /// <item><c>unrepresentable</c> — JSON-only Values a writer (Dumps and
 /// EmitCanonical) must refuse; there is deliberately no .ktav source.</item>
@@ -83,6 +86,21 @@ public class SpecConformance
         }
     }
 
+    /// <summary>Every non-canonical fixture in <c>valid/</c> ships a
+    /// <c>.canonical.ktav</c> companion (spec § 5.9.10, § 5.9.8) — this
+    /// derives that companion's path.</summary>
+    private static string CanonicalCompanionPath(string ktavPath) =>
+        Path.ChangeExtension(ktavPath, ".canonical.ktav");
+
+    public static IEnumerable<TestCaseData> ValidCanonicalCases()
+    {
+        foreach (var ktavPath in ValidPaths())
+        {
+            var name = Path.GetRelativePath(s_validDir, ktavPath).Replace('\\', '/');
+            yield return new TestCaseData(ktavPath).SetName($"canonical:{name}");
+        }
+    }
+
     public static IEnumerable<TestCaseData> InvalidCases()
     {
         foreach (var ktavPath in InvalidPaths())
@@ -128,6 +146,32 @@ public class SpecConformance
 
         Assert.That(ValueEquals(want, got),
             $"mismatch for {ktavPath}\nsrc:\n{src}\nwant: {want}\ngot:  {got}");
+    }
+
+    /// <summary>
+    /// The canonical writer must produce the exact spelling in the
+    /// fixture's <c>.canonical.ktav</c> companion (spec § 5.9.10, § 5.9.8)
+    /// — compared byte-for-byte, not just structurally. Idempotence
+    /// (re-canonicalising the companion yields itself) is implied but
+    /// not re-checked here, since every valid fixture is already run
+    /// through this same comparison.
+    /// </summary>
+    [TestCaseSource(nameof(ValidCanonicalCases))]
+    public void ValidCanonical(string ktavPath)
+    {
+        var canonicalPath = CanonicalCompanionPath(ktavPath);
+        Assert.That(File.Exists(canonicalPath), $"canonical companion missing: {canonicalPath}");
+
+        var src = File.ReadAllText(ktavPath);
+        var expectedBytes = File.ReadAllBytes(canonicalPath);
+
+        var value = Ktav.Loads(src);
+        var actualBytes = System.Text.Encoding.UTF8.GetBytes(Ktav.EmitCanonical(value));
+
+        Assert.That(actualBytes, Is.EqualTo(expectedBytes),
+            $"canonical mismatch for {ktavPath}\n" +
+            $"want: {System.Text.Encoding.UTF8.GetString(expectedBytes)}\n" +
+            $"got:  {System.Text.Encoding.UTF8.GetString(actualBytes)}");
     }
 
     [TestCaseSource(nameof(InvalidCases))]
@@ -241,6 +285,12 @@ public class SpecConformance
     /// a known category, all four categories must be present, and each
     /// must contain at least one fixture.
     /// </summary>
+    /// <remarks>
+    /// A shared fixture manifest is being designed in the spec repository
+    /// to replace hand-rolled guards like this one across all bindings.
+    /// Once it exists, this guard should consume it instead of hardcoding
+    /// the category whitelist and per-category invariants here.
+    /// </remarks>
     [Test]
     public void SuiteCoversEveryFixtureCategory()
     {
@@ -265,6 +315,16 @@ public class SpecConformance
         Assert.That(UnrepresentablePaths(), Is.Not.Empty, "no unrepresentable fixtures found");
         Assert.That(ParseableUnrepresentablePaths(), Is.Not.Empty,
             "no parseable-unrepresentable fixtures found");
+
+        // Every valid/ fixture must ship a .canonical.ktav companion (spec
+        // § 5.9.10, § 5.9.8) — a fixture added without one would silently
+        // drop out of ValidCanonical's coverage instead of failing loudly.
+        var validCount = ValidPaths().Count;
+        var canonicalCount = Directory.EnumerateFiles(s_validDir, "*.canonical.ktav",
+            SearchOption.AllDirectories).Count();
+        Assert.That(canonicalCount, Is.EqualTo(validCount),
+            $"valid/ has {validCount} fixture(s) but {canonicalCount} .canonical.ktav companion(s) — " +
+            "every valid fixture must ship exactly one canonical companion");
     }
 
     /// <summary>
