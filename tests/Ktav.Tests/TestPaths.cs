@@ -17,10 +17,10 @@ public class TestPaths
 {
     /// <summary>Repo root, derived from this source file's location at compile time.</summary>
     private static readonly string s_repo = Path.GetFullPath(
-        Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", "..", ".."));
+        Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", ".."));
 
     public static readonly string Cabi = CabiPath();
-    public static readonly string Spec = Path.Combine(s_repo, "spec", "versions", "0.6", "tests");
+    public static readonly string Spec = Path.Combine(s_repo, "spec", "versions", "0.7", "tests");
 
     [OneTimeSetUp]
     public void Setup()
