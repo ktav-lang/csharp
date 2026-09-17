@@ -45,7 +45,7 @@
   canonicalisation boundary and the `notation_boundaries` fixture.
 - Native-library resolution now targets the exact `v0.6.4` release asset.
 
-**Languages:** **English** · [Русский](CHANGELOG.ru.md) · [简体中文](CHANGELOG.zh.md)
+**Languages:** **English** · [Русский](docs/ru/CHANGELOG.ru.md) · [简体中文](docs/zh/CHANGELOG.zh.md)
 
 All notable changes to the `Ktav` NuGet package are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);

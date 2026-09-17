@@ -39,7 +39,7 @@
   `notation_boundaries` fixture。
 - 原生库加载器现在指向精确的 `v0.6.4` release asset。
 
-**语言:** [English](CHANGELOG.md) · [Русский](CHANGELOG.ru.md) · **简体中文**
+**语言:** [English](../../CHANGELOG.md) · [Русский](../ru/CHANGELOG.ru.md) · **简体中文**
 
 NuGet 包 `Ktav` 的所有显著变更记录于此。格式:
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/);版本号:

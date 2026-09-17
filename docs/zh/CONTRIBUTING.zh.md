@@ -1,6 +1,6 @@
 # 贡献指南 — Ktav (C# / .NET)
 
-**语言：** [English](CONTRIBUTING.md) · [Русский](CONTRIBUTING.ru.md) · **简体中文**
+**语言：** [English](../CONTRIBUTING.md) · [Русский](../ru/CONTRIBUTING.ru.md) · **简体中文**
 
 ## 核心规则
 
