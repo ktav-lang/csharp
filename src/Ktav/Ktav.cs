@@ -147,6 +147,27 @@ public static class Ktav
     }
 
     /// <summary>
+    /// Parse Ktav source text and immediately re-emit it in canonical
+    /// form (spec § 5.9), preserving the source's insertion order of
+    /// object keys. Equivalent to <c>EmitCanonical(Loads(src))</c>, but
+    /// with no <see cref="KtavValue"/> in between: one native call
+    /// instead of two, and no round-trip through the JSON wire format.
+    /// Comments and blank lines do NOT survive — canonical form carries
+    /// no trivia; use <see cref="Format"/> for that.
+    /// </summary>
+    /// <param name="src">Ktav source text.</param>
+    /// <returns>Canonical Ktav source text.</returns>
+    /// <exception cref="KtavException">on any parse or render error.</exception>
+    public static string CanonicalFromSource(string src)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        NativeLoader.EnsureRegistered();
+        var bytes = Encoding.UTF8.GetBytes(src);
+        var output = CallNative(NativeOp.CanonicalFromSource, bytes);
+        return Encoding.UTF8.GetString(output);
+    }
+
+    /// <summary>
     /// Version of the loaded <c>ktav_cabi</c>. Useful for sanity checks
     /// against <see cref="ExpectedNativeVersion"/>.
     /// </summary>
@@ -164,7 +185,7 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format }
+    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource }
 
     private static byte[] CallNative(NativeOp op, byte[] input)
     {
@@ -209,6 +230,10 @@ public static class Ktav
                     rc = NativeMethods.ktav_format(inputPtr, (nuint)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
+                case NativeOp.CanonicalFromSource:
+                    rc = NativeMethods.ktav_canonical_from_source(inputPtr, (nuint)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
                 default:
                     throw new InvalidOperationException("unknown native op: " + op);
             }
@@ -242,6 +267,10 @@ public static class Ktav
                     break;
                 case NativeOp.Format:
                     rc = NativeMethods.ktav_format(inputPtr, (UIntPtr)input.Length,
+                        out outBuf, out outLen, out outErr, out outErrLen);
+                    break;
+                case NativeOp.CanonicalFromSource:
+                    rc = NativeMethods.ktav_canonical_from_source(inputPtr, (UIntPtr)input.Length,
                         out outBuf, out outLen, out outErr, out outErrLen);
                     break;
                 default:

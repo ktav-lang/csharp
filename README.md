@@ -113,11 +113,74 @@ A complete runnable version lives in [`examples/Basic`](examples/Basic/Program.c
 | `Ktav.Loads(string) -> KtavValue` | Parse a Ktav document into the `KtavValue` tree. |
 | `Ktav.LoadsStrict(string) -> KtavValue` | Parse with strict numeric spelling checks. |
 | `Ktav.Dumps(KtavValue) -> string` | Render a `KtavValue` back as Ktav text. Top-level must be `KtavObject`. |
+| `Ktav.DumpsForceStrings(KtavValue) -> string` | Like `Dumps`, but coerces every leaf scalar to a String via the raw `::` marker. Compounds keep their structure. |
+| `Ktav.EmitCanonical(KtavValue) -> string` | Render a `KtavValue` as canonical Ktav (spec § 5.9). |
+| `Ktav.Format(string) -> string` | Format Ktav source into its normalised spelling, **keeping every comment**. See below. |
+| `Ktav.CanonicalFromSource(string) -> string` | Parse and re-emit as canonical Ktav in one call — `EmitCanonical(Loads(src))` with no intermediate `KtavValue`. Drops comments and blank lines like `EmitCanonical` does. |
 | `Ktav.NativeVersion()` | Version string reported by the loaded `ktav_cabi`. |
 | `Ktav.ExpectedNativeVersion` | Version this build was compiled against. |
 
-`KtavException` is thrown on any parse / render failure; the message is
-the UTF-8 string produced by the native parser.
+## Formatting — canonical spelling, comments kept
+
+`Format` and `EmitCanonical` are different operations:
+
+- **`EmitCanonical`** takes a `KtavValue` and writes the canonical form.
+  A value carries no comments, so none can survive.
+- **`Format`** takes source *text* and rewrites its spelling while
+  **preserving every comment verbatim** (spec § 3.4: a comment owns a
+  whole line). Key order is never changed — spec § 5.9 has no sorting
+  rule.
+
+```csharp
+Ktav.Format("## why\na:   {x: 1}\n");
+// "## why\na: {\n    x: 1\n}\n"
+// the comment survives; the inline compound becomes canonical
+// multi-line form
+```
+
+A run of two or more blank lines collapses to one, and blank padding
+immediately inside a bracket is dropped, which makes formatting a fixed
+point: `Format(Format(x)) == Format(x)`. For a document with no comments
+and no blank lines, the output equals `EmitCanonical(Loads(src))`.
+
+## Structured errors
+
+`KtavException` is thrown on any parse or render failure. Beyond the
+message it carries the same structured envelope every Ktav binding
+carries, so a tool can act on the fields instead of parsing prose:
+
+```csharp
+try { Ktav.Loads("a: 1\na: 2\n"); }
+catch (KtavException e)
+{
+    Console.WriteLine(e.Error);       // "DuplicateKey"
+    Console.WriteLine(e.Line);        // 2
+    Console.WriteLine(e.SpecSection); // "§6.2"
+}
+```
+
+| Member | Meaning |
+| --- | --- |
+| `Message` | Human-readable rendering of the failure. |
+| `Error` | Structured error class — `DuplicateKey`, `Unrepresentable`, `Message`. |
+| `Reason` | Writer-time reason code (spec § 5.9.0) such as `NonFiniteFloat`; `null` for parse errors. |
+| `Line` | 1-based source line; `null` when not applicable. |
+| `LineText` | Text of the offending line. |
+| `Span` | `KtavErrorSpan?` — byte offsets into the UTF-8 source. |
+| `Path` | Exact decoded key segments. |
+| `Body` | The offending value as written. |
+| `Canonical` | What the canonical form would have been. |
+| `SpecSection` | The clause violated, e.g. `§3.6/§5.2`. |
+
+Two details that are easy to get wrong:
+
+- **`Span` holds byte offsets into UTF-8**, not UTF-16 code units, which
+  is what .NET strings are indexed by. Convert before handing them to
+  anything that expects `string` indices, or to an LSP client that has
+  not negotiated `positionEncoding: "utf-8"`.
+- **`Path` is a list of segments, never a joined string.** A key
+  literally named `a.b` is one segment and cannot be confused with a
+  two-segment path.
 
 ## Type mapping
 

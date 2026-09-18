@@ -12,11 +12,24 @@
   inline 复合值中的 `\uXXXX` 转义（§ 3.7.1），包括孤立代理对拒绝（§ 6.13）
   与裸对值的字面量行为（§ 3.7 范围）。
 
+- **`Ktav.Format(string)`** —— C ABI 符号 `ktav_format`，作为保留注释的
+  Ktav 源文本格式化器对外开放。每条注释都逐字保留（spec § 3.4：注释独占
+  一整行）；连续两行及以上的空行会合并为一行，紧贴括号内侧的空行填充会被
+  丢弃，因此格式化是一个不动点：`Format(Format(x)) == Format(x)`。键顺序
+  绝不改变（spec § 5.9 没有排序规则）；对于没有注释也没有空行的文档，
+  输出等同于 `EmitCanonical(Loads(src))`。
+
 ### 变更
 
 - 跟踪 `ktav 0.7` 与 spec 0.7.0 —— 带引号键（§ 5.3.3）、`\uXXXX`
   unicode 转义（§ 3.7.1）、固定枚举的空白字符集（§ 3.3），以及 §§ 6.11–6.16
-  的新错误类别。公开 API 无变化：Rust 错误仍以消息字符串跨边界传递。
+  的新错误类别。
+- **`KtavException` 现在以一等属性携带结构化错误信封** —— `Error`、
+  `Reason`、`Line`、`LineText`、`Span`、`Path`（精确解码后的键段，绝不是
+  拼接字符串）、`Body`、`Canonical`、`SpecSection` —— 因此工具可以针对
+  字段处理，而不必解析 `Message`。`Span` 保存的是 UTF-8 源文本中的字节
+  偏移，而不是 .NET 字符串所用的 UTF-16 码元；用作 `string` 索引之前请先
+  转换。
 - Rust MSRV 提升至 1.71（ktav 0.7 的真实 MSRV）。
 
 ### 修复

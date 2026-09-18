@@ -15,12 +15,27 @@
   inline-compound values (§ 3.7.1) including lone-surrogate rejection
   (§ 6.13) and the bare-pair-value literal behaviour (§ 3.7 scope).
 
+- **`Ktav.Format(string)`** — the `ktav_format` C ABI symbol, exposed as
+  a comment-preserving formatter over Ktav source text. Every comment
+  survives verbatim (spec § 3.4: a comment owns a whole line); a run of
+  two or more blank lines collapses to one and blank padding immediately
+  inside a bracket is dropped, so formatting is a fixed point:
+  `Format(Format(x)) == Format(x)`. Key order is never changed (spec
+  § 5.9 has no sorting rule); for a document with no comments and no
+  blank lines the output equals `EmitCanonical(Loads(src))`.
+
 ### Changed
 
 - Tracks `ktav 0.7` and spec 0.7.0 — quoted keys (§ 5.3.3), `\uXXXX`
   unicode escapes (§ 3.7.1), the exhaustively enumerated whitespace set
-  (§ 3.3), and the new error categories of §§ 6.11–6.16. No public API
-  changes: Rust errors still cross the boundary as message strings.
+  (§ 3.3), and the new error categories of §§ 6.11–6.16.
+- **`KtavException` now carries the structured error envelope** as
+  first-class properties — `Error`, `Reason`, `Line`, `LineText`,
+  `Span`, `Path` (exact decoded key segments, never a joined string),
+  `Body`, `Canonical`, `SpecSection` — so a tool can act on the fields
+  instead of parsing `Message`. `Span` holds byte offsets into the UTF-8
+  source, not UTF-16 code units, which is what .NET strings are indexed
+  by; convert before using them as `string` indices.
 - Rust MSRV raised to 1.71 (ktav 0.7's MSRV).
 
 ### Fixed

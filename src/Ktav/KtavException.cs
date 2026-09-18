@@ -20,10 +20,15 @@ public readonly struct KtavErrorSpan
 /// <summary>
 /// Thrown when the native library rejects an input — parse failure for
 /// <see cref="Ktav.Loads"/>, render failure for <see cref="Ktav.Dumps"/>.
-/// The native side returns a structured JSON error envelope; the human
-/// readable <see cref="Exception.Message"/> is reconstructed from it
-/// (readable text, never a JSON blob), and the nine envelope fields are
-/// available as first-class properties.
+/// The native side returns a structured JSON error envelope; since ktav
+/// 0.7.2 the human-readable <see cref="Exception.Message"/> is the
+/// envelope's own <c>message</c> field, taken verbatim — never a JSON
+/// blob, and never reassembled from the other fields (a reassembled
+/// sentence didn't match what every other Ktav binding prints for the
+/// same error). Against a native library built before 0.7.2, which
+/// never wrote <c>message</c>, this falls back to a locally-built
+/// sentence. The nine other envelope fields are available as
+/// first-class properties.
 /// </summary>
 [Serializable]
 public sealed class KtavException : Exception
@@ -153,19 +158,34 @@ public sealed class KtavException : Exception
             string? body = GetStr(root, "body");
             string? canonical = GetStr(root, "canonical");
             string? specSection = GetStr(root, "spec_section");
+            string? coreMessage = GetStr(root, "message");
 
-            // The message reconstruction is deliberate: a user reading a
-            // stack trace must not be shown a JSON blob (issue rust#12
-            // decision).
-            var msg = error!;
-            if (body != null) msg += ": " + body;
-            if (path != null) msg += " at [" + string.Join(" -> ", path) + "]";
-            if (lineText != null)
-                msg += line.HasValue
-                    ? " (line " + line.Value + ": \"" + lineText + "\")"
-                    : " (\"" + lineText + "\")";
-            if (reason != null) msg += " [" + reason + "]";
-            if (specSection != null) msg += " (spec " + specSection + ")";
+            string msg;
+            if (coreMessage != null)
+            {
+                // Since ktav 0.7.2: the core's own Display rendering,
+                // taken verbatim. This is what task #303 replaces the
+                // local reconstruction below with — a reassembled
+                // sentence differed from what every other binding prints
+                // for the identical error.
+                msg = coreMessage;
+            }
+            else
+            {
+                // Fallback against a pre-0.7.2 native library, which
+                // never wrote `message`. A user reading a stack trace
+                // must still not be shown a JSON blob (issue rust#12
+                // decision) — this is the pre-#303 local reconstruction.
+                msg = error!;
+                if (body != null) msg += ": " + body;
+                if (path != null) msg += " at [" + string.Join(" -> ", path) + "]";
+                if (lineText != null)
+                    msg += line.HasValue
+                        ? " (line " + line.Value + ": \"" + lineText + "\")"
+                        : " (\"" + lineText + "\")";
+                if (reason != null) msg += " [" + reason + "]";
+                if (specSection != null) msg += " (spec " + specSection + ")";
+            }
 
             return new KtavException(msg, error!, reason, line, lineText,
                 span, path, body, canonical, specSection);

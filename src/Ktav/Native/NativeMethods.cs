@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Ktav;
 
 /// <summary>
-/// P/Invoke surface to the <c>ktav_cabi</c> shared library. Eight
+/// P/Invoke surface to the <c>ktav_cabi</c> shared library. Nine
 /// functions, all using the "caller-owned input pointer, callee-owned
 /// output buffer" pattern. The output buffer (success or error) MUST
 /// be freed via <see cref="ktav_free"/>.
@@ -56,6 +56,12 @@ internal static partial class NativeMethods
         out IntPtr outErr, out nuint outErrLen);
 
     [LibraryImport(LibName)]
+    public static partial int ktav_canonical_from_source(
+        IntPtr src, nuint srcLen,
+        out IntPtr outBuf, out nuint outLen,
+        out IntPtr outErr, out nuint outErrLen);
+
+    [LibraryImport(LibName)]
     public static partial void ktav_free(IntPtr ptr, nuint len);
 
     [LibraryImport(LibName)]
@@ -93,6 +99,12 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int ktav_format(
+        IntPtr src, UIntPtr srcLen,
+        out IntPtr outBuf, out UIntPtr outLen,
+        out IntPtr outErr, out UIntPtr outErrLen);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_canonical_from_source(
         IntPtr src, UIntPtr srcLen,
         out IntPtr outBuf, out UIntPtr outLen,
         out IntPtr outErr, out UIntPtr outErrLen);

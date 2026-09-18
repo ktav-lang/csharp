@@ -19,7 +19,7 @@
 //!
 //! ## C ABI
 //!
-//! Eight functions; the six output functions all use the same
+//! Nine functions; the seven output functions all use the same
 //! "caller-owned pointer, callee-owned buffer" pattern:
 //!
 //! - `ktav_loads(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
@@ -28,6 +28,7 @@
 //! - `ktav_dumps_force_strings(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
 //! - `ktav_emit_canonical(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
 //! - `ktav_format(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
+//! - `ktav_canonical_from_source(src, src_len, out_buf, out_len, out_err, out_err_len) -> i32`
 //! - `ktav_free(ptr, len)` — free a buffer returned by loads/dumps/format.
 //! - `ktav_version()` — NUL-terminated static string, for sanity checks.
 //!
@@ -457,6 +458,60 @@ pub unsafe extern "C" fn ktav_format(
     }
 }
 
+/// Parse Ktav source text and immediately re-emit it in canonical form
+/// (spec § 5.9), preserving the source's insertion order of object keys.
+/// Equivalent to `ktav_loads` piped into `ktav_emit_canonical`, but with
+/// no intermediate JSON value: one native call instead of two.
+///
+/// # Safety
+/// Same as [`ktav_loads`].
+#[no_mangle]
+pub unsafe extern "C" fn ktav_canonical_from_source(
+    src: *const u8,
+    src_len: usize,
+    out_buf: *mut *mut u8,
+    out_len: *mut usize,
+    out_err: *mut *mut c_char,
+    out_err_len: *mut usize,
+) -> c_int {
+    *out_buf = ptr::null_mut();
+    *out_len = 0;
+    *out_err = ptr::null_mut();
+    *out_err_len = 0;
+
+    let text = match std::str::from_utf8(slice::from_raw_parts(src, src_len)) {
+        Ok(s) => s,
+        Err(e) => {
+            emit_message(
+                format!("input is not valid UTF-8: {e}"),
+                "",
+                out_err,
+                out_err_len,
+            );
+            return 1;
+        }
+    };
+
+    let value = match ktav::parse(text) {
+        Ok(v) => v,
+        Err(e) => {
+            emit_error(&e, text, out_err, out_err_len);
+            return 1;
+        }
+    };
+
+    match ktav::emit_canonical(&value) {
+        Ok(canonical) => {
+            emit(canonical.into_bytes(), out_buf, out_len);
+            0
+        }
+        Err(e) => {
+            emit_error(&e, text, out_err, out_err_len);
+            1
+        }
+    }
+}
+
 /// Free a buffer returned by any of the output functions — `ktav_loads`,
 /// `ktav_loads_strict`, `ktav_dumps`, `ktav_dumps_force_strings`,
 /// `ktav_emit_canonical`, and `ktav_format` — success or error.
@@ -816,7 +871,8 @@ mod tests {
                 "path",
                 "body",
                 "canonical",
-                "spec_section"
+                "spec_section",
+                "message"
             ]
         );
         assert!(!env["error"].as_str().unwrap().is_empty());
@@ -853,5 +909,47 @@ mod tests {
         let env = envelope(&msg);
         assert_eq!(env["error"], "Message");
         assert!(env["line"].is_null());
+    }
+
+    /// Task #311: this symbol was declare_cabi!'s to have from the start,
+    /// but this crate predates that migration and never grew it. Proves
+    /// it round-trips and agrees with the loads+emit_canonical two-step
+    /// path it replaces.
+    #[test]
+    fn canonical_from_source_agrees_with_loads_then_emit_canonical() {
+        for src in [
+            &b"a: 1.0\n"[..],
+            &b"a: 1e400\n"[..],
+            &b"a.b: 1\nc: [1, 2]\n"[..],
+            &b"## dropped\na: 1\n\n\nb: 2\n"[..],
+        ] {
+            // SAFETY: pure test calls into the ABI with valid locals.
+            let direct = call(ktav_canonical_from_source, src).expect("canonical_from_source");
+            let loaded = call(ktav_loads, src).expect("loads");
+            let two_step = call(ktav_emit_canonical, loaded.as_bytes()).expect("emit_canonical");
+            assert_eq!(
+                direct,
+                two_step,
+                "diverged for {:?}",
+                String::from_utf8_lossy(src)
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_from_source_drops_comments_and_blank_lines() {
+        // SAFETY: pure test call into the ABI with valid locals.
+        let out = call(ktav_canonical_from_source, b"## c\na: 1\n\n\nb: 2\n")
+            .expect("canonical_from_source succeeds");
+        assert!(!out.contains("##"), "comment must not survive: {out:?}");
+        assert!(!out.contains("\n\n"), "blank line must not survive: {out:?}");
+    }
+
+    #[test]
+    fn canonical_from_source_surfaces_an_envelope_on_parse_failure() {
+        // SAFETY: pure test call into the ABI with valid locals.
+        let msg = call(ktav_canonical_from_source, b"a: [").expect_err("must fail");
+        let env = envelope(&msg);
+        assert!(env.contains_key("error"), "not an envelope: {msg:?}");
     }
 }
