@@ -942,7 +942,10 @@ mod tests {
         let out = call(ktav_canonical_from_source, b"## c\na: 1\n\n\nb: 2\n")
             .expect("canonical_from_source succeeds");
         assert!(!out.contains("##"), "comment must not survive: {out:?}");
-        assert!(!out.contains("\n\n"), "blank line must not survive: {out:?}");
+        assert!(
+            !out.contains("\n\n"),
+            "blank line must not survive: {out:?}"
+        );
     }
 
     #[test]
