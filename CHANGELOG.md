@@ -1,5 +1,16 @@
 # Changelog
 
+**Languages:** **English** · [Русский](docs/ru/CHANGELOG.ru.md) · [简体中文](docs/zh/CHANGELOG.zh.md)
+
+All notable changes to the `Ktav` NuGet package are documented here.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+versioning: [Semantic Versioning](https://semver.org/) with the pre-1.0
+convention that a MINOR bump is breaking.
+
+This changelog tracks **binding releases**, not changes to the Ktav
+format itself — see
+[`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
+
 ## Unreleased
 
 ### Added
@@ -37,6 +48,15 @@
   source, not UTF-16 code units, which is what .NET strings are indexed
   by; convert before using them as `string` indices.
 - Rust MSRV raised to 1.71 (ktav 0.7's MSRV).
+- Migrated `crates/cabi` to a single `ktav::declare_cabi!()` invocation
+  (ktav's `cabi` feature) instead of a hand-rolled C ABI shim; the
+  exported symbol surface is unchanged, so the .NET API is unaffected.
+  Dependency floor raised to `ktav 0.8`, spec submodule re-pinned to
+  `v0.8.0` (adds § 5.2: a decimal with a redundant leading zero parses
+  as a String, not an Integer).
+- The package version moves to **0.8.0**, in step with the core and the
+  specification; the prebuilt-library download fallback now targets the
+  `v0.8.0` release asset.
 
 ### Fixed
 
@@ -46,6 +66,14 @@
   resolves this repo's own submodule. Invalid-UTF-8 fixtures (§ 6.15)
   are exercised through the byte-level native entry point instead of
   lossy text decoding that hid the defect.
+- Conformance also read `spec/versions/0.7/tests` after the submodule
+  was re-pinned to `0.8.0` — the path was hardcoded, not derived from
+  the pin. It now reads `spec/versions/0.8/tests` and executes every
+  fixture category the corpus ships, including the new `strict-lossy/`
+  (`Loads` must equal the lax value, `LoadsStrict` must throw with the
+  matching reason, body and canonical form). A guard test fails the
+  build if an unrecognized category directory appears under the
+  corpus, so a future addition can't repeat this silently.
 
 ## 0.6.4 — 2026-08-23
 
@@ -59,17 +87,6 @@
 - Tracks `ktav 0.6.4` and spec 0.6.4, including the normative float
   canonicalisation boundary and the `notation_boundaries` fixture.
 - Native-library resolution now targets the exact `v0.6.4` release asset.
-
-**Languages:** **English** · [Русский](docs/ru/CHANGELOG.ru.md) · [简体中文](docs/zh/CHANGELOG.zh.md)
-
-All notable changes to the `Ktav` NuGet package are documented here.
-Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
-versioning: [Semantic Versioning](https://semver.org/) with the pre-1.0
-convention that a MINOR bump is breaking.
-
-This changelog tracks **binding releases**, not changes to the Ktav
-format itself — see
-[`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
 ## [0.6.1] — 2026-06-05
 
@@ -141,7 +158,6 @@ Sync to Ktav 0.6.0 — keys now support escaping.
 
 NuGet package: **`Ktav`**, version 0.5.0.
 
-
 ## 0.3.1 — 2026-05-10
 
 ### Added
@@ -175,7 +191,6 @@ NuGet package: **`Ktav`**, version 0.5.0.
 
 NuGet package: **`Ktav`**, version 0.3.1.
 
-
 ## 0.3.0 — 2026-05-08
 
 ### Changed
@@ -194,7 +209,6 @@ NuGet package: **`Ktav`**, version 0.3.1.
 - spec submodule synced (paren-fixtures: `partial_parens.ktav`
   reduced to still-valid shapes; new `invalid/inline_paren_string_*`
   fixtures pin the new strictness).
-
 
 ## 0.2.0 — 2026-05-07
 
@@ -215,7 +229,6 @@ NuGet package: **`Ktav`**, version 0.3.1.
 
 - spec submodule synced (typed_float_without_decimal moved invalid →
   valid/typed_float_integer_body).
-
 
 ## 0.1.2 — 2026-05-03
 

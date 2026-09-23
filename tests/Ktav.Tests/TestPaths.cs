@@ -20,7 +20,7 @@ public class TestPaths
         Path.Combine(Path.GetDirectoryName(SourceFile())!, "..", ".."));
 
     public static readonly string Cabi = CabiPath();
-    public static readonly string Spec = Path.Combine(s_repo, "spec", "versions", "0.7", "tests");
+    public static readonly string Spec = Path.Combine(s_repo, "spec", "versions", "0.8", "tests");
 
     [OneTimeSetUp]
     public void Setup()

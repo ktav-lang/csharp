@@ -35,6 +35,7 @@ public class SpecConformance
     private static readonly string s_invalidDir = Path.Combine(TestPaths.Spec, "invalid");
     private static readonly string s_unrepresentableDir = Path.Combine(TestPaths.Spec, "unrepresentable");
     private static readonly string s_parseableUnrepresentableDir = Path.Combine(TestPaths.Spec, "parseable-unrepresentable");
+    private static readonly string s_strictLossyDir = Path.Combine(TestPaths.Spec, "strict-lossy");
 
     private static List<string> ValidPaths()
     {
@@ -75,6 +76,25 @@ public class SpecConformance
                     SearchOption.AllDirectories)
                 .OrderBy(p => p)
                 .ToList();
+    }
+
+    private static List<string> StrictLossyPaths()
+    {
+        if (!Directory.Exists(s_strictLossyDir))
+            return new List<string>();
+        return Directory.EnumerateFiles(s_strictLossyDir, "*.ktav",
+                    SearchOption.AllDirectories)
+                .OrderBy(p => p)
+                .ToList();
+    }
+
+    public static IEnumerable<TestCaseData> StrictLossyCases()
+    {
+        foreach (var ktavPath in StrictLossyPaths())
+        {
+            var name = Path.GetRelativePath(s_strictLossyDir, ktavPath).Replace('\\', '/');
+            yield return new TestCaseData(ktavPath).SetName($"strict-lossy:{name}");
+        }
     }
 
     public static IEnumerable<TestCaseData> ValidCases()
@@ -280,6 +300,33 @@ public class SpecConformance
     }
 
     /// <summary>
+    /// Spec § 8.1 <c>strict-lossy/</c>: <see cref="Ktav.Loads"/> accepts the
+    /// fixture and yields <c>lax_value</c>; <see cref="Ktav.LoadsStrict"/>
+    /// refuses it with <c>LossyScalar</c> naming the exact body/canonical.
+    /// </summary>
+    [TestCaseSource(nameof(StrictLossyCases))]
+    public void StrictLossy(string ktavPath)
+    {
+        var oraclePath = Path.ChangeExtension(ktavPath, ".json");
+        Assert.That(File.Exists(oraclePath), $"oracle JSON missing: {oraclePath}");
+
+        var src = File.ReadAllText(ktavPath);
+        using var doc = JsonDocument.Parse(File.ReadAllText(oraclePath));
+        var root = doc.RootElement;
+        var want = WireJson.Decode(System.Text.Encoding.UTF8.GetBytes(root.GetProperty("lax_value").GetRawText()));
+
+        var got = Ktav.Loads(src);
+        Assert.That(ValueEquals(want, got),
+            $"lax mismatch for {ktavPath}\nsrc:\n{src}\nwant: {want}\ngot:  {got}");
+
+        var ex = Assert.Throws<KtavException>(() => Ktav.LoadsStrict(src),
+            $"LoadsStrict should refuse {ktavPath}")!;
+        Assert.That(ex.Error, Is.EqualTo(root.GetProperty("expected_error").GetString()), $"error class for {ktavPath}");
+        Assert.That(ex.Body, Is.EqualTo(root.GetProperty("body").GetString()), $"body for {ktavPath}");
+        Assert.That(ex.Canonical, Is.EqualTo(root.GetProperty("canonical").GetString()), $"canonical for {ktavPath}");
+    }
+
+    /// <summary>
     /// No fixture category may be silently skipped: the spec submodule
     /// must be checked out, every directory under the suite root must be
     /// a known category, all four categories must be present, and each
@@ -297,7 +344,7 @@ public class SpecConformance
         Assert.That(TestPaths.SpecPresent(), Is.True,
             $"spec submodule checkout missing/empty: {TestPaths.Spec} — the suite must not silently pass");
 
-        var whitelist = new[] { "valid", "invalid", "unrepresentable", "parseable-unrepresentable" };
+        var whitelist = new[] { "valid", "invalid", "unrepresentable", "parseable-unrepresentable", "strict-lossy" };
 
         var found = Directory.EnumerateDirectories(TestPaths.Spec)
             .Select(Path.GetFileName)!
@@ -315,6 +362,7 @@ public class SpecConformance
         Assert.That(UnrepresentablePaths(), Is.Not.Empty, "no unrepresentable fixtures found");
         Assert.That(ParseableUnrepresentablePaths(), Is.Not.Empty,
             "no parseable-unrepresentable fixtures found");
+        Assert.That(StrictLossyPaths(), Is.Not.Empty, "no strict-lossy fixtures found");
 
         // Every valid/ fixture must ship a .canonical.ktav companion (spec
         // § 5.9.10, § 5.9.8) — a fixture added without one would silently
