@@ -48,8 +48,9 @@ public sealed record KtavBool(bool Value) : KtavValue
 }
 
 /// <summary>
-/// Typed integer scalar (the <c>:i</c> form). Held as text so arbitrary
-/// precision (digits beyond <see cref="long"/>) round-trips byte for byte.
+/// Typed integer scalar. Held as text to preserve the spelling accepted
+/// by the writer; parsing oversized bare integers may produce a
+/// <see cref="KtavString"/> instead.
 /// </summary>
 public sealed record KtavInteger(string Text) : KtavValue
 {
@@ -63,9 +64,8 @@ public sealed record KtavInteger(string Text) : KtavValue
 }
 
 /// <summary>
-/// Typed float scalar (the <c>:f</c> form). Held as text (mantissa with a
-/// decimal point, optional scientific exponent) so precision round-trips
-/// exactly.
+/// Typed float scalar. Held as text in the value model; parsing may
+/// normalize its spelling (for example, <c>1.10</c> becomes <c>1.1</c>).
 /// </summary>
 public sealed record KtavFloat(string Text) : KtavValue
 {

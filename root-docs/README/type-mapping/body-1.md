@@ -8,15 +8,18 @@ no lossy coercions:
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| bare integer     | `KtavInteger` (text form — `ToBigInteger()` / `ToInt64()`) |
+| bare integer in the core's signed 64-bit range | `KtavInteger` (text form — `ToBigInteger()` / `ToInt64()`) |
 | bare decimal     | `KtavFloat` (text form — `ToDouble()`)                  |
 | other scalar     | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject` (key insertion order preserved)            |
 
-Integers and floats are held as **text** so arbitrary precision
-(digits beyond `long`) and exact decimal round-trip are preserved byte
-for byte across parse / render cycles.
+An integer outside the core's signed 64-bit range loads as `KtavString`,
+not `KtavInteger`. `KtavInteger` and `KtavFloat` expose their stored text,
+but this does not promise arbitrary-precision Ktav numbers or preservation
+of the source's decimal spelling: for example, `1.10` loads as `1.1`.
+The public records can be constructed with other text, but native writing
+still enforces the core spec domain.
 
 >>>>> lang=ru
 ## Отображение типов
@@ -28,15 +31,18 @@ Ktav, без потерьных приведений:
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| голое целое      | `KtavInteger` (текстовая форма — `ToBigInteger()` / `ToInt64()`) |
+| голое целое в диапазоне знакового 64-битного числа | `KtavInteger` (текстовая форма — `ToBigInteger()` / `ToInt64()`) |
 | голое десятичное | `KtavFloat` (текстовая форма — `ToDouble()`)            |
 | прочий скаляр    | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject` (порядок вставки сохраняется)              |
 
-Целые и дробные числа хранятся **как текст**, поэтому произвольная
-точность (количество цифр сверх `long`) и точный десятичный round-trip
-побайтово сохраняются между циклами разбора и вывода.
+Целое вне диапазона знакового 64-битного числа ядра загружается как
+`KtavString`, а не `KtavInteger`. `KtavInteger` и `KtavFloat` предоставляют
+хранимый текст, но это не означает поддержку чисел произвольной точности
+или сохранение исходной записи дроби: например, `1.10` загружается как
+`1.1`. Публичные record-типы можно создать с другим текстом, но нативная
+запись всё равно соблюдает числовую область спецификации ядра.
 
 >>>>> lang=zh
 ## 类型映射
@@ -48,12 +54,15 @@ Ktav, без потерьных приведений:
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| 裸整数           | `KtavInteger`（文本形式 —— `ToBigInteger()` / `ToInt64()`） |
+| 核心有符号 64 位范围内的裸整数 | `KtavInteger`（文本形式 —— `ToBigInteger()` / `ToInt64()`） |
 | 裸小数           | `KtavFloat`（文本形式 —— `ToDouble()`）                   |
 | 其他标量         | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject`（保留插入顺序）                             |
 
-整数与浮点数以 **文本** 形式保存，因此任意精度（超出 `long` 的位数）
-与十进制的精确表示都能在解析 / 渲染之间逐字节保留。
+超出核心有符号 64 位范围的整数会加载为 `KtavString`，而不是
+`KtavInteger`。`KtavInteger` 与 `KtavFloat` 会公开其保存的文本，但这
+不代表 Ktav 数字支持任意精度，也不保证保留源十进制写法：例如
+`1.10` 会加载为 `1.1`。公开 record 类型可以用其他文本构造，但原生
+写入仍会遵守核心规范的数值范围。
 

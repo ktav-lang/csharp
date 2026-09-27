@@ -14,7 +14,9 @@
 | 文件                         | 范围                                         |
 |------------------------------|----------------------------------------------|
 | `BasicTests.cs`              | 核心的解析 / 渲染 / roundtrip 行为。         |
-| `SpecConformance.cs`        | 对照规范的跨语言一致性测试。                 |
+| `SpecConformance.cs`         | 对照规范的跨语言一致性测试。                 |
+| `ReadmeDocCheckTests.cs`     | 可执行的 README 示例。                       |
+| `DocsReleaseRegressionTests.cs` | 三语文档示例。                            |
 
 ### 2. 不要在绑定中重新发明格式
 
@@ -48,38 +50,33 @@
 需要：
 
 - .NET **8 SDK**（或更新版本）用于构建和测试。
-- 通过 [`rustup`](https://rustup.rs/) 安装 Rust 工具链。MSRV：**1.70**。
+- 通过 [`rustup`](https://rustup.rs/) 安装 Rust 工具链。MSRV：**1.71**。
 
-开发期间的目录结构 —— 克隆相邻的仓库：
+开发期间的目录结构：
 
 ```
 ktav-lang/
-├── csharp/   ← 本仓库
-├── rust/     ← 相邻 Rust crate（可选，已发布到 crates.io）
-└── spec/     ← 一致性测试固件（git submodule）
+├── csharp/       ← 本仓库
+│   └── spec/     ← 固定的一致性测试语料子模块
+└── rust/         ← 相邻 Rust crate（可选，已发布到 crates.io）
 ```
 
 ### 构建
 
 ```
-cargo build --release -p ktav-ffi
-dotnet build -c Release
+cargo build --release -p ktav-cabi
+dotnet build src/Ktav/Ktav.csproj -c Release
 ```
 
 ### 测试
 
 ```
-dotnet test -c Release
+dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release
 ```
 
-`SpecConformance` 模块运行来自 `ktav-lang/spec` 的跨语言固件测试套件。
-它通过以下方式解析 spec 目录：
-
-1. 环境变量 `KTAV_SPEC_DIR`（如已设置）。
-2. `<repo>/spec`（git submodule）。
-3. `<repo>/../spec`（相邻仓库回退）。
-
-都无法解析时，一致性测试会**跳过**而不是失败。
+`SpecConformance` 模块运行来自 `ktav-lang/spec` 的跨语言固定值测试套件，
+读取 `spec/versions/0.8/tests`。子模块必须已检出；语料缺失会导致测试
+失败，而不会跳过。
 
 ## 语言政策
 

@@ -15,7 +15,9 @@ Tests live under `tests/`:
 | File                         | Scope                                        |
 |------------------------------|----------------------------------------------|
 | `BasicTests.cs`              | Core parse/render/roundtrip behaviour.       |
-| `SpecConformance.cs`        | Cross-language conformance against the spec. |
+| `SpecConformance.cs`         | Cross-language conformance against the spec. |
+| `ReadmeDocCheckTests.cs`     | Executable README examples.                  |
+| `DocsReleaseRegressionTests.cs` | Multilingual documentation examples.       |
 
 ### 2. Don't reinvent the format in the bindings
 
@@ -52,38 +54,33 @@ Commits should be atomic. Don't prefix commit messages with `feat:` /
 You need:
 
 - .NET **8 SDK** (or newer) for building and testing.
-- A Rust toolchain via [`rustup`](https://rustup.rs/). MSRV: **1.70**.
+- A Rust toolchain via [`rustup`](https://rustup.rs/). MSRV: **1.71**.
 
-Layout during development — clone the sibling repos:
+Layout during development:
 
 ```
 ktav-lang/
-├── csharp/   ← this repo
-├── rust/     ← sibling Rust crate (optional, published to crates.io)
-└── spec/     ← conformance fixtures (git submodule)
+├── csharp/       ← this repo
+│   └── spec/     ← pinned conformance-fixture submodule
+└── rust/         ← sibling Rust crate (optional, published to crates.io)
 ```
 
 ### Build
 
 ```
-cargo build --release -p ktav-ffi
-dotnet build -c Release
+cargo build --release -p ktav-cabi
+dotnet build src/Ktav/Ktav.csproj -c Release
 ```
 
 ### Test
 
 ```
-dotnet test -c Release
+dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release
 ```
 
 The `SpecConformance` module runs the cross-language fixture suite
-from `ktav-lang/spec`. It resolves the spec directory via:
-
-1. `KTAV_SPEC_DIR` environment variable, if set.
-2. `<repo>/spec` (the git submodule).
-3. `<repo>/../spec` (sibling fallback).
-
-When none resolves, conformance tests **skip** rather than fail.
+from `ktav-lang/spec`, reading `spec/versions/0.8/tests`. The submodule
+must be checked out; a missing corpus is a test failure, not a skip.
 
 ## Language policy
 

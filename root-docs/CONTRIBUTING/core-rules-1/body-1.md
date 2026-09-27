@@ -12,7 +12,9 @@ Tests live under `tests/`:
 | File                         | Scope                                        |
 |------------------------------|----------------------------------------------|
 | `BasicTests.cs`              | Core parse/render/roundtrip behaviour.       |
-| `SpecConformance.cs`        | Cross-language conformance against the spec. |
+| `SpecConformance.cs`         | Cross-language conformance against the spec. |
+| `ReadmeDocCheckTests.cs`     | Executable README examples.                  |
+| `DocsReleaseRegressionTests.cs` | Multilingual documentation examples.       |
 
 >>>>> lang=ru
 ## Основные правила
@@ -28,7 +30,9 @@ Tests live under `tests/`:
 | Файл                         | Область                                      |
 |------------------------------|----------------------------------------------|
 | `BasicTests.cs`              | Основы разбора / рендеринга / roundtrip.     |
-| `SpecConformance.cs`        | Межъязыковая конформация со спецификацией.   |
+| `SpecConformance.cs`         | Межъязыковая конформация со спецификацией.   |
+| `ReadmeDocCheckTests.cs`     | Исполняемые примеры README.                  |
+| `DocsReleaseRegressionTests.cs` | Примеры документации на трёх языках.      |
 
 >>>>> lang=zh
 ## 核心规则
@@ -43,5 +47,7 @@ Tests live under `tests/`:
 | 文件                         | 范围                                         |
 |------------------------------|----------------------------------------------|
 | `BasicTests.cs`              | 核心的解析 / 渲染 / roundtrip 行为。         |
-| `SpecConformance.cs`        | 对照规范的跨语言一致性测试。                 |
+| `SpecConformance.cs`         | 对照规范的跨语言一致性测试。                 |
+| `ReadmeDocCheckTests.cs`     | 可执行的 README 示例。                       |
+| `DocsReleaseRegressionTests.cs` | 三语文档示例。                            |
 

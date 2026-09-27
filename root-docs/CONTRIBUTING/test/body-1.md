@@ -2,47 +2,32 @@
 ### Test
 
 ```
-dotnet test -c Release
+dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release
 ```
 
 The `SpecConformance` module runs the cross-language fixture suite
-from `ktav-lang/spec`. It resolves the spec directory via:
-
-1. `KTAV_SPEC_DIR` environment variable, if set.
-2. `<repo>/spec` (the git submodule).
-3. `<repo>/../spec` (sibling fallback).
-
-When none resolves, conformance tests **skip** rather than fail.
+from `ktav-lang/spec`, reading `spec/versions/0.8/tests`. The submodule
+must be checked out; a missing corpus is a test failure, not a skip.
 
 >>>>> lang=ru
 ### Тесты
 
 ```
-dotnet test -c Release
+dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release
 ```
 
 Модуль `SpecConformance` запускает межъязыковой набор фикстур из
-`ktav-lang/spec`. Он находит каталог spec через:
-
-1. Переменную окружения `KTAV_SPEC_DIR`, если задана.
-2. `<repo>/spec` (git submodule).
-3. `<repo>/../spec` (соседний fallback).
-
-Если ничего не найдено, conformance-тесты **пропускаются**, а не падают.
+`ktav-lang/spec`, читая `spec/versions/0.8/tests`. Сабмодуль должен быть
+выкачан; отсутствие корпуса приводит к падению теста, а не к пропуску.
 
 >>>>> lang=zh
 ### 测试
 
 ```
-dotnet test -c Release
+dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release
 ```
 
-`SpecConformance` 模块运行来自 `ktav-lang/spec` 的跨语言固件测试套件。
-它通过以下方式解析 spec 目录：
-
-1. 环境变量 `KTAV_SPEC_DIR`（如已设置）。
-2. `<repo>/spec`（git submodule）。
-3. `<repo>/../spec`（相邻仓库回退）。
-
-都无法解析时，一致性测试会**跳过**而不是失败。
+`SpecConformance` 模块运行来自 `ktav-lang/spec` 的跨语言固定值测试套件，
+读取 `spec/versions/0.8/tests`。子模块必须已检出；语料缺失会导致测试
+失败，而不会跳过。
 

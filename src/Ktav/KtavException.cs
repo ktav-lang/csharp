@@ -18,17 +18,12 @@ public readonly struct KtavErrorSpan
 }
 
 /// <summary>
-/// Thrown when the native library rejects an input — parse failure for
-/// <see cref="Ktav.Loads"/>, render failure for <see cref="Ktav.Dumps"/>.
-/// The native side returns a structured JSON error envelope; since ktav
-/// 0.8.0 the human-readable <see cref="Exception.Message"/> is the
-/// envelope's own <c>message</c> field, taken verbatim — never a JSON
-/// blob, and never reassembled from the other fields (a reassembled
-/// sentence didn't match what every other Ktav binding prints for the
-/// same error). Against a native library built before 0.8.0, which
-/// never wrote <c>message</c>, this falls back to a locally-built
-/// sentence. The nine other envelope fields are available as
-/// first-class properties.
+/// Thrown when parsing or rendering fails. Errors returned by the native
+/// library expose its structured envelope; since ktav 0.8.0 its
+/// <see cref="Exception.Message"/> is the native <c>message</c> verbatim.
+/// Host-side precondition errors and errors from older native libraries
+/// use locally generated messages. The envelope fields are exposed as
+/// first-class properties when available.
 /// </summary>
 [Serializable]
 public sealed class KtavException : Exception
@@ -191,6 +186,19 @@ public sealed class KtavException : Exception
                 span, path, body, canonical, specSection);
         }
     }
+
+    internal static KtavException WriterError(string reason, IReadOnlyList<string> path)
+    {
+        var message = "UnrepresentableAt: " + reason;
+        if (path.Count > 0) message += " at [" + string.Join(" -> ", path) + "]";
+        message += " (spec §5.9.0)";
+        return new KtavException(message, "UnrepresentableAt", reason,
+            null, null, null, path, null, null, "§5.9.0");
+    }
+
+    internal static KtavException InvalidUtf8(long start, long end) =>
+        new KtavException("InvalidUtf8 (spec §6.15)", "InvalidUtf8", null,
+            null, null, new KtavErrorSpan(start, end), null, null, null, "§6.15");
 
     private static string? GetStr(System.Text.Json.JsonElement root, string name)
     {

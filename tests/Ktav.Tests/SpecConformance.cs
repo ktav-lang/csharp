@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.Json;
-using System.Runtime.InteropServices;
 
 using NUnit.Framework;
 
@@ -12,7 +11,7 @@ namespace Ktav.Tests;
 
 /// <summary>
 /// Walks the Ktav spec conformance suite and replays every fixture
-/// against the loaded native parser across four fixture categories:
+/// against the loaded native parser across the five manifest categories:
 /// <list type="bullet">
 /// <item><c>valid</c> — parses, compared against a plain-JSON oracle;
 /// each fixture's <c>.canonical.ktav</c> companion is also checked
@@ -36,60 +35,44 @@ public class SpecConformance
     private static readonly string s_unrepresentableDir = Path.Combine(TestPaths.Spec, "unrepresentable");
     private static readonly string s_parseableUnrepresentableDir = Path.Combine(TestPaths.Spec, "parseable-unrepresentable");
     private static readonly string s_strictLossyDir = Path.Combine(TestPaths.Spec, "strict-lossy");
+    private static CorpusManifest Manifest() => TestPaths.Corpus;
+
+    private static List<string> Paths(string category) => Manifest().CategoriesByName[category]
+        .Select(f => Path.Combine(TestPaths.Spec, category, f.Path.Replace('/', Path.DirectorySeparatorChar)))
+        .ToList();
+
+    private static CorpusFixture Fixture(string category, string path) => Manifest().CategoriesByName[category]
+        .Single(f => Path.GetFullPath(Path.Combine(TestPaths.Spec, category,
+            f.Path.Replace('/', Path.DirectorySeparatorChar))) == Path.GetFullPath(path));
 
     private static List<string> ValidPaths()
     {
-        if (!Directory.Exists(s_validDir))
-            return new List<string>();
-        return Directory.EnumerateFiles(s_validDir, "*.ktav",
-                    SearchOption.AllDirectories)
-                .Where(p => !p.EndsWith(".canonical.ktav", StringComparison.Ordinal))
-                .OrderBy(p => p)
-                .ToList();
+        return Paths("valid");
     }
 
     private static List<string> InvalidPaths()
     {
-        if (!Directory.Exists(s_invalidDir))
-            return new List<string>();
-        return Directory.EnumerateFiles(s_invalidDir, "*.ktav",
-                    SearchOption.AllDirectories)
-                .OrderBy(p => p)
-                .ToList();
+        return Paths("invalid");
     }
 
     private static List<string> UnrepresentablePaths()
     {
-        if (!Directory.Exists(s_unrepresentableDir))
-            return new List<string>();
-        return Directory.EnumerateFiles(s_unrepresentableDir, "*.json",
-                    SearchOption.AllDirectories)
-                .OrderBy(p => p)
-                .ToList();
+        return Paths("unrepresentable");
     }
 
     private static List<string> ParseableUnrepresentablePaths()
     {
-        if (!Directory.Exists(s_parseableUnrepresentableDir))
-            return new List<string>();
-        return Directory.EnumerateFiles(s_parseableUnrepresentableDir, "*.ktav",
-                    SearchOption.AllDirectories)
-                .OrderBy(p => p)
-                .ToList();
+        return Paths("parseable-unrepresentable");
     }
 
     private static List<string> StrictLossyPaths()
     {
-        if (!Directory.Exists(s_strictLossyDir))
-            return new List<string>();
-        return Directory.EnumerateFiles(s_strictLossyDir, "*.ktav",
-                    SearchOption.AllDirectories)
-                .OrderBy(p => p)
-                .ToList();
+        return Paths("strict-lossy");
     }
 
     public static IEnumerable<TestCaseData> StrictLossyCases()
     {
+        Manifest();
         foreach (var ktavPath in StrictLossyPaths())
         {
             var name = Path.GetRelativePath(s_strictLossyDir, ktavPath).Replace('\\', '/');
@@ -99,6 +82,7 @@ public class SpecConformance
 
     public static IEnumerable<TestCaseData> ValidCases()
     {
+        Manifest();
         foreach (var ktavPath in ValidPaths())
         {
             var name = Path.GetRelativePath(s_validDir, ktavPath).Replace('\\', '/');
@@ -114,6 +98,7 @@ public class SpecConformance
 
     public static IEnumerable<TestCaseData> ValidCanonicalCases()
     {
+        Manifest();
         foreach (var ktavPath in ValidPaths())
         {
             var name = Path.GetRelativePath(s_validDir, ktavPath).Replace('\\', '/');
@@ -123,6 +108,7 @@ public class SpecConformance
 
     public static IEnumerable<TestCaseData> InvalidCases()
     {
+        Manifest();
         foreach (var ktavPath in InvalidPaths())
         {
             var name = Path.GetRelativePath(s_invalidDir, ktavPath).Replace('\\', '/');
@@ -132,6 +118,7 @@ public class SpecConformance
 
     public static IEnumerable<TestCaseData> UnrepresentableCases()
     {
+        Manifest();
         foreach (var jsonPath in UnrepresentablePaths())
         {
             var name = Path.GetRelativePath(s_unrepresentableDir, jsonPath).Replace('\\', '/');
@@ -141,6 +128,7 @@ public class SpecConformance
 
     public static IEnumerable<TestCaseData> ParseableUnrepresentableCases()
     {
+        Manifest();
         foreach (var ktavPath in ParseableUnrepresentablePaths())
         {
             var name = Path.GetRelativePath(s_parseableUnrepresentableDir, ktavPath).Replace('\\', '/');
@@ -198,22 +186,70 @@ public class SpecConformance
     public void Invalid(string ktavPath)
     {
         var raw = File.ReadAllBytes(ktavPath);
+        var oraclePath = Path.ChangeExtension(ktavPath, ".json");
+        using var oracle = JsonDocument.Parse(File.ReadAllText(oraclePath));
+        var expected = oracle.RootElement;
 
-        // § 6.15 fixtures are deliberately invalid UTF-8 (e.g.
-        // invalid_utf8/lone_continuation_byte — the spec's own note warns
-        // runners the file IS the fixture). A C# string cannot carry
-        // invalid UTF-8: lossy decoding would hide the defect before the
-        // parser ever sees it, so such fixtures go through the binding's
-        // byte-level native entry and must be rejected there.
-        if (!TryDecodeStrictUtf8(raw, out var src))
+        if (Fixture("invalid", ktavPath).Flags.Contains("raw_bytes"))
         {
-            Assert.That(NativeLoadsRejects(raw),
-                $"expected invalid-UTF-8 rejection for {ktavPath}");
+            var error = Assert.Throws<KtavException>(() => Ktav.LoadsUtf8(raw),
+                $"expected invalid-UTF-8 rejection for {ktavPath}")!;
+            Assert.That(error.Error, Is.EqualTo("InvalidUtf8"), $"error class for {ktavPath}");
+            Assert.That(error.SpecSection, Is.EqualTo("§6.15"), $"spec section for {ktavPath}");
+            Assert.That(error.Span.HasValue, Is.True, $"UTF-8 error span missing for {ktavPath}");
+            AssertInvalidOracle(error, expected, ktavPath);
             return;
         }
 
-        Assert.Throws<KtavException>(() => Ktav.Loads(src),
-            $"expected parse error for {ktavPath}");
+        Assert.That(TryDecodeStrictUtf8(raw, out var src), Is.True,
+            $"malformed UTF-8 fixture missing raw_bytes flag: {ktavPath}");
+        var parseError = Assert.Throws<KtavException>(() => Ktav.Loads(src),
+            $"expected parse error for {ktavPath}")!;
+        AssertInvalidOracle(parseError, expected, ktavPath);
+    }
+
+    internal static void AssertInvalidOracle(KtavException error, JsonElement expected, string path)
+    {
+        Assert.That(expected.ValueKind, Is.EqualTo(JsonValueKind.Object), $"invalid oracle object for {path}");
+        Assert.That(expected.TryGetProperty("expected_error", out var expectedError), Is.True,
+            $"expected_error missing for {path}");
+        Assert.That(expectedError.ValueKind, Is.EqualTo(JsonValueKind.String), $"expected_error must be a string for {path}");
+        string expectedClass = expectedError.GetString()!;
+        Assert.That(expectedClass, Is.Not.Empty, $"expected_error must be nonempty for {path}");
+        Assert.That(error.Error, Is.EqualTo(expectedClass), $"error class for {path}");
+        AssertJsonString(expected, "reason", error.Reason, path);
+        AssertJsonInt(expected, "line", error.Line, path);
+        AssertJsonString(expected, "line_text", error.LineText, path);
+        AssertJsonString(expected, "body", error.Body, path);
+        AssertJsonString(expected, "canonical", error.Canonical, path);
+        AssertJsonString(expected, "spec_section", error.SpecSection, path);
+        if (expected.TryGetProperty("span", out var span))
+        {
+            if (span.ValueKind == JsonValueKind.Null) Assert.That(error.Span.HasValue, Is.False, $"span for {path}");
+            else
+            {
+                Assert.That(error.Span.HasValue, Is.True, $"span missing for {path}");
+                Assert.That(error.Span!.Value.Start, Is.EqualTo(span.GetProperty("start").GetInt64()), $"span.start for {path}");
+                Assert.That(error.Span.Value.End, Is.EqualTo(span.GetProperty("end").GetInt64()), $"span.end for {path}");
+            }
+        }
+        if (expected.TryGetProperty("path", out var segments))
+        {
+            if (segments.ValueKind == JsonValueKind.Null) Assert.That(error.Path, Is.Null, $"path for {path}");
+            else Assert.That(error.Path, Is.EqualTo(segments.EnumerateArray().Select(x => x.GetString()).ToArray()), $"path for {path}");
+        }
+    }
+
+    private static void AssertJsonString(JsonElement expected, string name, string? actual, string path)
+    {
+        if (!expected.TryGetProperty(name, out var value)) return;
+        Assert.That(value.ValueKind == JsonValueKind.Null ? (string?)null : value.GetString(), Is.EqualTo(actual), $"{name} for {path}");
+    }
+
+    private static void AssertJsonInt(JsonElement expected, string name, int? actual, string path)
+    {
+        if (!expected.TryGetProperty(name, out var value)) return;
+        Assert.That(value.ValueKind == JsonValueKind.Null ? (int?)null : value.GetInt32(), Is.EqualTo(actual), $"{name} for {path}");
     }
 
     private static bool TryDecodeStrictUtf8(byte[] bytes, out string text)
@@ -230,40 +266,6 @@ public class SpecConformance
         }
     }
 
-    /// <summary>
-    /// Drives <c>ktav_loads</c> over raw bytes via the binding's own
-    /// native pipeline (same resolver plumbing as <see cref="Ktav.Loads"/>.
-    /// Returns true when the native call fails.
-    /// </summary>
-    private static bool NativeLoadsRejects(byte[] input)
-    {
-        NativeLoader.EnsureRegistered();
-        IntPtr inputPtr = IntPtr.Zero;
-        try
-        {
-            if (input.Length > 0)
-            {
-                inputPtr = Marshal.AllocHGlobal(input.Length);
-                Marshal.Copy(input, 0, inputPtr, input.Length);
-            }
-            int rc = NativeMethods.ktav_loads(inputPtr, (nuint)input.Length,
-                out IntPtr outBuf, out nuint outLen,
-                out IntPtr outErr, out nuint outErrLen);
-            FreeNativeBuffer(outBuf, outLen);
-            FreeNativeBuffer(outErr, outErrLen);
-            return rc != 0;
-        }
-        finally
-        {
-            if (inputPtr != IntPtr.Zero) Marshal.FreeHGlobal(inputPtr);
-        }
-    }
-
-    private static void FreeNativeBuffer(IntPtr ptr, nuint len)
-    {
-        if (ptr != IntPtr.Zero) NativeMethods.ktav_free(ptr, len);
-    }
-
     [TestCaseSource(nameof(UnrepresentableCases))]
     public void Unrepresentable(string jsonPath)
     {
@@ -271,11 +273,14 @@ public class SpecConformance
         var root = doc.RootElement;
         var value = FixtureValueToKtav(root.GetProperty("value"));
         var reason = root.GetProperty("unrepresentable_reason").GetString();
+        var (expectedReason, expectedSection) = ReasonContract(reason!);
 
-        Assert.Throws<KtavException>(() => Ktav.Dumps(value),
+        var dumpsError = Assert.Throws<KtavException>(() => Ktav.Dumps(value),
             $"Dumps should refuse unrepresentable value ({reason}): {jsonPath}");
-        Assert.Throws<KtavException>(() => Ktav.EmitCanonical(value),
+        var canonicalError = Assert.Throws<KtavException>(() => Ktav.EmitCanonical(value),
             $"EmitCanonical should refuse unrepresentable value ({reason}): {jsonPath}");
+        AssertUnrepresentableError(dumpsError!, expectedReason, expectedSection, jsonPath);
+        AssertUnrepresentableError(canonicalError!, expectedReason, expectedSection, jsonPath);
     }
 
     [TestCaseSource(nameof(ParseableUnrepresentableCases))]
@@ -295,8 +300,13 @@ public class SpecConformance
         Assert.That(ValueEquals(want, got),
             $"mismatch for {ktavPath}\nsrc:\n{src}\nwant: {want}\ngot:  {got}");
 
-        Assert.Throws<KtavException>(() => Ktav.EmitCanonical(got),
+        var dumpsError = Assert.Throws<KtavException>(() => Ktav.Dumps(got),
+            $"Dumps should refuse unrepresentable value ({reason}): {ktavPath}");
+        var canonicalError = Assert.Throws<KtavException>(() => Ktav.EmitCanonical(got),
             $"EmitCanonical should refuse unrepresentable value ({reason}): {ktavPath}");
+        var (expectedReason, expectedSection) = ReasonContract(reason!);
+        AssertUnrepresentableError(dumpsError!, expectedReason, expectedSection, ktavPath);
+        AssertUnrepresentableError(canonicalError!, expectedReason, expectedSection, ktavPath);
     }
 
     /// <summary>
@@ -327,52 +337,36 @@ public class SpecConformance
     }
 
     /// <summary>
-    /// No fixture category may be silently skipped: the spec submodule
-    /// must be checked out, every directory under the suite root must be
-    /// a known category, all four categories must be present, and each
-    /// must contain at least one fixture.
+    /// The shared manifest guard validates the five categories, exact
+    /// counts, companions, and known root metadata before discovery.
     /// </summary>
     /// <remarks>
-    /// A shared fixture manifest is being designed in the spec repository
-    /// to replace hand-rolled guards like this one across all bindings.
-    /// Once it exists, this guard should consume it instead of hardcoding
-    /// the category whitelist and per-category invariants here.
+    /// This test confirms the discovered categories match that validated
+    /// manifest instance.
     /// </remarks>
     [Test]
     public void SuiteCoversEveryFixtureCategory()
     {
-        Assert.That(TestPaths.SpecPresent(), Is.True,
-            $"spec submodule checkout missing/empty: {TestPaths.Spec} — the suite must not silently pass");
+        Assert.That(Manifest().CategoriesByName.Keys, Is.EquivalentTo(CorpusManifest.PinnedCounts.Keys));
+    }
 
-        var whitelist = new[] { "valid", "invalid", "unrepresentable", "parseable-unrepresentable", "strict-lossy" };
+    private static (string Reason, string Section) ReasonContract(string reason) => reason switch
+    {
+        "ScalarRoot" => ("ScalarRoot", "§5.9.0"),
+        "NonFiniteFloat" => ("NonFiniteFloat", "§5.9.0"),
+        "EmptyKeyName" => ("EmptyKeyName", "§5.9.0"),
+        "CRByte" => ("CRByte", "§5.9.7"),
+        "BothFormsRequired" => ("BothFormsRequired", "§5.9.7"),
+        "LeadingWhitespaceCollision" => ("LeadingWhitespaceCollision", "§5.9.7"),
+        "TrailingWhitespaceCollision" => ("TrailingWhitespaceCollision", "§5.9.7"),
+        _ => throw new AssertionException($"unknown unrepresentable_reason: {reason}"),
+    };
 
-        var found = Directory.EnumerateDirectories(TestPaths.Spec)
-            .Select(Path.GetFileName)!
-            .ToList();
-        foreach (var name in found)
-            Assert.That(whitelist, Does.Contain(name),
-                $"unknown fixture category directory: {name}");
-
-        foreach (var name in whitelist)
-            Assert.That(Directory.Exists(Path.Combine(TestPaths.Spec, name)), Is.True,
-                $"missing fixture category directory: {name}");
-
-        Assert.That(ValidPaths(), Is.Not.Empty, "no valid fixtures found");
-        Assert.That(InvalidPaths(), Is.Not.Empty, "no invalid fixtures found");
-        Assert.That(UnrepresentablePaths(), Is.Not.Empty, "no unrepresentable fixtures found");
-        Assert.That(ParseableUnrepresentablePaths(), Is.Not.Empty,
-            "no parseable-unrepresentable fixtures found");
-        Assert.That(StrictLossyPaths(), Is.Not.Empty, "no strict-lossy fixtures found");
-
-        // Every valid/ fixture must ship a .canonical.ktav companion (spec
-        // § 5.9.10, § 5.9.8) — a fixture added without one would silently
-        // drop out of ValidCanonical's coverage instead of failing loudly.
-        var validCount = ValidPaths().Count;
-        var canonicalCount = Directory.EnumerateFiles(s_validDir, "*.canonical.ktav",
-            SearchOption.AllDirectories).Count();
-        Assert.That(canonicalCount, Is.EqualTo(validCount),
-            $"valid/ has {validCount} fixture(s) but {canonicalCount} .canonical.ktav companion(s) — " +
-            "every valid fixture must ship exactly one canonical companion");
+    private static void AssertUnrepresentableError(KtavException error, string reason, string section, string path)
+    {
+        Assert.That(error.Error, Is.EqualTo("UnrepresentableAt"), $"error class for {path}");
+        Assert.That(error.Reason, Is.EqualTo(reason), $"reason for {path}");
+        Assert.That(error.SpecSection, Is.EqualTo(section), $"spec section for {path}");
     }
 
     /// <summary>

@@ -21,15 +21,27 @@ public class TestPaths
 
     public static readonly string Cabi = CabiPath();
     public static readonly string Spec = Path.Combine(s_repo, "spec", "versions", "0.8", "tests");
+    private static readonly Lazy<CorpusManifest> s_corpus = new(() => CorpusManifest.ValidatePinned(Spec));
+
+    internal static CorpusManifest Corpus => s_corpus.Value;
 
     [OneTimeSetUp]
     public void Setup()
     {
+        Assert.That(SpecPresent(), Is.True,
+            $"spec submodule checkout missing/empty: {Spec}");
+        _ = Corpus;
+
         var overridePath = Environment.GetEnvironmentVariable("KTAV_LIB_PATH");
         if (!string.IsNullOrEmpty(overridePath))
+        {
+            Assert.That(File.Exists(overridePath), Is.True, $"native library missing: {overridePath}");
             NativeLoader.SetLibraryPath(overridePath);
+        }
         else if (File.Exists(Cabi))
             NativeLoader.SetLibraryPath(Cabi);
+        else
+            Assert.Fail($"native library missing: {Cabi}");
     }
 
     public static bool CabiBuilt() => File.Exists(Cabi);

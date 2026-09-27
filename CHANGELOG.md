@@ -13,67 +13,48 @@ format itself — see
 
 ## Unreleased
 
+No unreleased changes.
+
+## 0.8.0 — 2026-09-27
+
 ### Added
 
-- Conformance runner: the spec 0.7 fixture categories
-  `unrepresentable/` (writer must refuse — currently 5 `.json` inputs)
-  and `parseable-unrepresentable/` (parses fine, canonical emit must
-  refuse — 4 fixtures) now execute and assert. A guard test hard-fails
-  when the spec submodule is not checked out, when an unknown fixture
-  category directory appears, or when any category is empty.
-- API smoke tests for 0.7 behaviours: quoted keys (§ 5.3.3), quote
-  characters staying literal in value position, `\uXXXX` escapes in
-  inline-compound values (§ 3.7.1) including lone-surrogate rejection
-  (§ 6.13) and the bare-pair-value literal behaviour (§ 3.7 scope).
-
-- **`Ktav.Format(string)`** — the `ktav_format` C ABI symbol, exposed as
-  a comment-preserving formatter over Ktav source text. Every comment
-  survives verbatim (spec § 3.4: a comment owns a whole line); a run of
-  two or more blank lines collapses to one and blank padding immediately
-  inside a bracket is dropped, so formatting is a fixed point:
-  `Format(Format(x)) == Format(x)`. Key order is never changed (spec
-  § 5.9 has no sorting rule); for a document with no comments and no
-  blank lines the output equals `EmitCanonical(Loads(src))`.
+- `Ktav.Format(string)` exposes the comment-preserving formatter; comments
+  stay verbatim, blank-line normalization is idempotent, and key order is
+  preserved.
+- Writer failures expose structured error details through `KtavException`.
+- Regression coverage captures spec 0.7 parsing behavior: quoted keys,
+  literal quotes in value position, scoped Unicode escapes with lone-
+  surrogate rejection, and bare pair values remaining literal.
+- Conformance coverage follows the pinned spec 0.8 corpus, executes every
+  fixture category, and guards against missing, empty, or unknown
+  categories. Documentation examples have behavior-based regression tests.
 
 ### Changed
 
-- Tracks `ktav 0.7` and spec 0.7.0 — quoted keys (§ 5.3.3), `\uXXXX`
-  unicode escapes (§ 3.7.1), the exhaustively enumerated whitespace set
-  (§ 3.3), and the new error categories of §§ 6.11–6.16.
-- **`KtavException` now carries the structured error envelope** as
-  first-class properties — `Error`, `Reason`, `Line`, `LineText`,
-  `Span`, `Path` (exact decoded key segments, never a joined string),
-  `Body`, `Canonical`, `SpecSection` — so a tool can act on the fields
-  instead of parsing `Message`. `Span` holds byte offsets into the UTF-8
-  source, not UTF-16 code units, which is what .NET strings are indexed
-  by; convert before using them as `string` indices.
-- Rust MSRV raised to 1.71 (ktav 0.7's MSRV).
-- Migrated `crates/cabi` to a single `ktav::declare_cabi!()` invocation
-  (ktav's `cabi` feature) instead of a hand-rolled C ABI shim; the
-  exported symbol surface is unchanged, so the .NET API is unaffected.
-  Dependency floor raised to `ktav 0.8`, spec submodule re-pinned to
-  `v0.8.0` (adds § 5.2: a decimal with a redundant leading zero parses
-  as a String, not an Integer).
-- The package version moves to **0.8.0**, in step with the core and the
-  specification; the prebuilt-library download fallback now targets the
-  `v0.8.0` release asset.
+- Targets `ktav 0.8` and spec 0.8.0, including the 0.8 numeric inference
+  rules. This release also includes spec 0.7 behavior: quoted keys,
+  scoped Unicode escapes, and the corresponding parse/error rules.
+- Rust MSRV is 1.71. The C ABI crate now uses `ktav::declare_cabi!()`;
+  its exported symbols are unchanged, and its dependency floor is `ktav 0.8`.
+- The spec submodule is pinned to v0.8.0. The package and native library
+  expectation are 0.8.0, and the prebuilt-library fallback targets the
+  matching v0.8.0 release asset.
+- `KtavException.Message` uses the native error envelope's message when
+  provided; structured fields remain available for programmatic handling.
+- Host-side argument validation continues to use standard .NET argument
+  exceptions; native library loading can raise loader exceptions.
 
 ### Fixed
 
-- Conformance: the test repo-root derivation was off by one directory
-  and could silently target a sibling `spec` checkout — or, in CI and
-  worktrees, run zero fixture tests while staying green. The runner now
-  resolves this repo's own submodule. Invalid-UTF-8 fixtures (§ 6.15)
-  are exercised through the byte-level native entry point instead of
-  lossy text decoding that hid the defect.
-- Conformance also read `spec/versions/0.7/tests` after the submodule
-  was re-pinned to `0.8.0` — the path was hardcoded, not derived from
-  the pin. It now reads `spec/versions/0.8/tests` and executes every
-  fixture category the corpus ships, including the new `strict-lossy/`
-  (`Loads` must equal the lax value, `LoadsStrict` must throw with the
-  matching reason, body and canonical form). A guard test fails the
-  build if an unrecognized category directory appears under the
-  corpus, so a future addition can't repeat this silently.
+- Conformance tests resolve this checkout's pinned fixture corpus rather
+  than a sibling checkout, and invalid UTF-8 inputs use the byte-level API.
+- Fixture manifest discovery and expected-result oracles are corrected,
+  so the executed corpus is the pinned one and assertions match its cases.
+- Strict-lossy fixtures verify that lax parsing yields the expected value
+  while strict parsing reports the matching reason, body, and canonical form.
+- Numeric and API documentation now reflects the core's representable
+  domain and the behavior of both target frameworks.
 
 ## 0.6.4 — 2026-08-23
 

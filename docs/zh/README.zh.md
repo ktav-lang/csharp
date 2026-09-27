@@ -14,8 +14,8 @@
 **使用方无需编译原生代码**，常规的 `dotnet add package` 即可。
 
 目标框架：**`net8.0`**（`LibraryImport`，支持 AOT）与 **`netstandard2.0`**
-（`DllImport`，无 `NativeLibrary` 解析器 —— 需借助 NuGet 的 `runtimes/`
-布局或 `KTAV_LIB_PATH`）。
+（`DllImport`，无 `NativeLibrary` 解析器 —— 使用 NuGet 的 `runtimes/`
+布局或系统原生库搜索路径；`KTAV_LIB_PATH` 会被忽略）。
 
 ## 安装
 
@@ -111,7 +111,7 @@ string text = Ktav.Dumps(doc);
 | --- | --- |
 | `Ktav.Loads(string) -> KtavValue` | 把 Ktav 文档解析成 `KtavValue` 树。 |
 | `Ktav.LoadsStrict(string) -> KtavValue` | 用严格的数字写法检查来解析文档。 |
-| `Ktav.Dumps(KtavValue) -> string` | 把 `KtavValue` 渲染回 Ktav 文本。顶层必须是 `KtavObject`。 |
+| `Ktav.Dumps(KtavValue) -> string` | 把 `KtavValue` 渲染回 Ktav 文本。顶层必须是 `KtavObject` 或 `KtavArray`。 |
 | `Ktav.DumpsForceStrings(KtavValue) -> string` | 同 `Dumps`，但通过原始标记 `::` 把每个叶子标量强制为 String。复合值保持结构。 |
 | `Ktav.EmitCanonical(KtavValue) -> string` | 把 `KtavValue` 输出为规范 Ktav（spec § 5.9）。 |
 | `Ktav.Format(string) -> string` | 把 Ktav 源文本格式化为规范化写法，**保留全部注释**。见下文。 |
@@ -142,9 +142,11 @@ Ktav.Format("## why\na:   {x: 1}\n");
 
 ## 结构化错误
 
-解析或渲染失败时会抛出 `KtavException`。除了消息之外，它还携带与所有
-Ktav 绑定相同的结构化信封，因此工具可以直接使用这些字段，而不必解析
-人类可读的文本：
+原生解析、格式化和渲染失败会报告为 `KtavException`。除了消息之外，
+它还携带原生结构化错误信封，因此工具可以直接使用字段，而不必解析
+文本。但并非所有失败都是 `KtavException`：null 参数使用
+`ArgumentNullException`，宿主端参数校验使用标准 .NET 参数异常，而
+原生库加载可能抛出加载器异常：
 
 ```csharp
 try { Ktav.Loads("a: 1\na: 2\n"); }
@@ -186,24 +188,31 @@ catch (KtavException e)
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| 裸整数           | `KtavInteger`（文本形式 —— `ToBigInteger()` / `ToInt64()`） |
+| 核心有符号 64 位范围内的裸整数 | `KtavInteger`（文本形式 —— `ToBigInteger()` / `ToInt64()`） |
 | 裸小数           | `KtavFloat`（文本形式 —— `ToDouble()`）                   |
 | 其他标量         | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject`（保留插入顺序）                             |
 
-整数与浮点数以 **文本** 形式保存，因此任意精度（超出 `long` 的位数）
-与十进制的精确表示都能在解析 / 渲染之间逐字节保留。
+超出核心有符号 64 位范围的整数会加载为 `KtavString`，而不是
+`KtavInteger`。`KtavInteger` 与 `KtavFloat` 会公开其保存的文本，但这
+不代表 Ktav 数字支持任意精度，也不保证保留源十进制写法：例如
+`1.10` 会加载为 `1.1`。公开 record 类型可以用其他文本构造，但原生
+写入仍会遵守核心规范的数值范围。
 
 ## 键的转义
 
 自 spec 0.6.4 起，键段内的字面量 `.` 或 `:` 以反斜杠书写：
 
 ```text
-a\.b: v        // key is the single segment "a.b" -> { "a.b": "v" }
-a\:b: v        // key contains a colon            -> { "a:b": "v" }
-x.y\.z: v      // split on the first dot only     -> { "x": { "y.z": "v" } }
+a\.b: v
+a\:b: v
+x.y\.z: v
 ```
+
+它们分别解析为单段键 `a.b` 和 `a:b`，以及依次为 `x`、`y.z` 的嵌套键。
+请将说明写在 Ktav 示例之外：行内 `//` 文本是值内容，不是注释。Ktav
+注释必须独占一行并以 `##` 开头。
 
 键中的字面量反斜杠写作 `\\`。
 
@@ -225,7 +234,9 @@ x.y\.z: v      // split on the first dot only     -> { "x": { "y.z": "v" } }
 `<userCache>` 在 Windows 上是 `%LOCALAPPDATA%`，macOS 上是
 `~/Library/Caches`，Linux 上是 `$XDG_CACHE_HOME` 或 `~/.cache`。
 
-在 `netstandard2.0` 上只有第 (2) 步适用 —— 那里没有 `NativeLibrary` API。
+在 `netstandard2.0` 上没有自定义解析器：不会使用 `KTAV_LIB_PATH`
+环境变量，也不会使用缓存/下载回退。请依赖 NuGet 原生资产布局或
+平台常规的原生库搜索路径。
 
 ## 运行时支持
 

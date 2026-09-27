@@ -17,7 +17,7 @@ package` just works.
 
 Targets **`net8.0`** (with AOT-ready `LibraryImport`) and **`netstandard2.0`**
 (`DllImport`, no `NativeLibrary` resolver — use NuGet's `runtimes/`
-layout or `KTAV_LIB_PATH`).
+layout or system native-library search paths; `KTAV_LIB_PATH` is ignored).
 
 >>>>> lang=ru
 # ktav — .NET-биндинги
@@ -38,7 +38,8 @@ layout or `KTAV_LIB_PATH`).
 
 Цели сборки: **`net8.0`** (с `LibraryImport`, готовым к AOT) и
 **`netstandard2.0`** (`DllImport`, без резолвера `NativeLibrary` —
-используйте компоновку NuGet `runtimes/` или `KTAV_LIB_PATH`).
+используйте компоновку NuGet `runtimes/` или системные пути поиска
+нативных библиотек; `KTAV_LIB_PATH` игнорируется).
 
 >>>>> lang=zh
 # ktav — .NET 绑定
@@ -57,6 +58,6 @@ layout or `KTAV_LIB_PATH`).
 **使用方无需编译原生代码**，常规的 `dotnet add package` 即可。
 
 目标框架：**`net8.0`**（`LibraryImport`，支持 AOT）与 **`netstandard2.0`**
-（`DllImport`，无 `NativeLibrary` 解析器 —— 需借助 NuGet 的 `runtimes/`
-布局或 `KTAV_LIB_PATH`）。
+（`DllImport`，无 `NativeLibrary` 解析器 —— 使用 NuGet 的 `runtimes/`
+布局或系统原生库搜索路径；`KTAV_LIB_PATH` 会被忽略）。
 

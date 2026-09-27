@@ -34,7 +34,7 @@ internal static class WireJson
         return ReadValue(ref reader);
     }
 
-    public static byte[] Encode(KtavValue value)
+    public static byte[] Encode(KtavValue value, bool forceStrings = false)
     {
         using var stream = new MemoryStream(256);
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
@@ -44,7 +44,7 @@ internal static class WireJson
             SkipValidation = true,
         }))
         {
-            WriteValue(writer, value);
+            WriteValue(writer, value, forceStrings);
         }
         return stream.ToArray();
     }
@@ -123,7 +123,7 @@ internal static class WireJson
         return new KtavObject(entries);
     }
 
-    private static void WriteValue(Utf8JsonWriter w, KtavValue v)
+    private static void WriteValue(Utf8JsonWriter w, KtavValue v, bool forceStrings)
     {
         switch (v)
         {
@@ -139,16 +139,23 @@ internal static class WireJson
                 w.WriteEndObject();
                 break;
             case KtavFloat f:
-                w.WriteStartObject();
-                w.WriteString("$f", f.Text);
-                w.WriteEndObject();
+                if (forceStrings && IsNonFiniteFloatText(f.Text))
+                {
+                    w.WriteStringValue(f.Text);
+                }
+                else
+                {
+                    w.WriteStartObject();
+                    w.WriteString("$f", f.Text);
+                    w.WriteEndObject();
+                }
                 break;
             case KtavString s:
                 w.WriteStringValue(s.Value);
                 break;
             case KtavArray a:
                 w.WriteStartArray();
-                foreach (var item in a.Items) WriteValue(w, item);
+                foreach (var item in a.Items) WriteValue(w, item, forceStrings);
                 w.WriteEndArray();
                 break;
             case KtavObject o:
@@ -156,7 +163,7 @@ internal static class WireJson
                 foreach (var entry in o.Entries)
                 {
                     w.WritePropertyName(entry.Key);
-                    WriteValue(w, entry.Value);
+                    WriteValue(w, entry.Value, forceStrings);
                 }
                 w.WriteEndObject();
                 break;
@@ -164,4 +171,7 @@ internal static class WireJson
                 throw new KtavException("unexpected KtavValue subtype: " + v.GetType());
         }
     }
+
+    private static bool IsNonFiniteFloatText(string text) =>
+        text == "NaN" || text == "Infinity" || text == "-Infinity";
 }

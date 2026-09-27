@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -11,7 +12,7 @@ namespace Ktav;
 /// </summary>
 /// <example>
 /// <code>
-/// var doc  = Ktav.Loads("port :i= 8080\nname = app\n");
+/// var doc  = Ktav.Loads("port: 8080\nname: app\n");
 /// var text = Ktav.Dumps(doc);
 /// </code>
 /// </example>
@@ -42,6 +43,27 @@ public static class Ktav
         return WireJson.Decode(output);
     }
 
+    internal static KtavValue LoadsUtf8(byte[] source)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+        try
+        {
+            new UTF8Encoding(false, true).GetCharCount(source);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            var start = Math.Max(0, Math.Min(ex.Index, source.Length));
+            var count = ex.BytesUnknown?.Length ?? 0;
+            if (count == 0) count = 1;
+            var end = (int)Math.Min(source.Length, (long)start + count);
+            throw KtavException.InvalidUtf8(start, end);
+        }
+
+        NativeLoader.EnsureRegistered();
+        var output = CallNative(NativeOp.Loads, source);
+        return WireJson.Decode(output);
+    }
+
     /// <summary>Parse a Ktav document with strict numeric spelling checks.</summary>
     /// <exception cref="KtavException">when strict parsing rejects the source.</exception>
     public static KtavValue LoadsStrict(string src)
@@ -64,7 +86,8 @@ public static class Ktav
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
         if (value is not (KtavObject or KtavArray))
-            throw new KtavException("top-level Ktav document must be an object or array");
+            throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
+        ValidateWriterValue(value, new List<string>());
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value);
         var output = CallNative(NativeOp.Dumps, input);
@@ -74,7 +97,7 @@ public static class Ktav
     /// <summary>
     /// Render a <see cref="KtavValue"/> back to Ktav text with **every
     /// scalar coerced to a String** — booleans, integers, floats, and
-    /// null are flattened to their textual form via the raw-marker
+    /// null are flattened to their textual form using the raw-string
     /// <c>::</c>. Compounds preserve their structure; only leaf scalars
     /// are coerced. The output round-trips back through
     /// <see cref="Loads"/> as the same set of <see cref="KtavString"/>
@@ -82,7 +105,7 @@ public static class Ktav
     /// </summary>
     /// <remarks>
     /// Useful for "everything is a string" dumps — e.g. for downstream
-    /// consumers that don't understand typed markers. Top-level value
+    /// consumers that don't understand typed values. Top-level value
     /// must be a <see cref="KtavObject"/> or <see cref="KtavArray"/>.
     /// </remarks>
     /// <exception cref="KtavException">on any render error.</exception>
@@ -90,9 +113,9 @@ public static class Ktav
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
         if (value is not (KtavObject or KtavArray))
-            throw new KtavException("top-level Ktav document must be an object or array");
+            throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
         NativeLoader.EnsureRegistered();
-        var input = WireJson.Encode(value);
+        var input = WireJson.Encode(value, forceStrings: true);
         var output = CallNative(NativeOp.DumpsForceStrings, input);
         return Encoding.UTF8.GetString(output);
     }
@@ -113,7 +136,8 @@ public static class Ktav
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
         if (value is not (KtavObject or KtavArray))
-            throw new KtavException("top-level Ktav document must be an object or array");
+            throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
+        ValidateWriterValue(value, new List<string>());
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value);
         var output = CallNative(NativeOp.EmitCanonical, input);
@@ -186,6 +210,31 @@ public static class Ktav
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
     private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource }
+
+    private static void ValidateWriterValue(KtavValue value, List<string> path)
+    {
+        switch (value)
+        {
+            case KtavFloat f when IsNativeNonFiniteSpelling(f.Text):
+                throw KtavException.WriterError("NonFiniteFloat", path.ToArray());
+            case KtavObject obj:
+                foreach (var entry in obj.Entries)
+                {
+                    path.Add(entry.Key);
+                    if (entry.Key.Length == 0)
+                        throw KtavException.WriterError("EmptyKeyName", path.ToArray());
+                    ValidateWriterValue(entry.Value, path);
+                    path.RemoveAt(path.Count - 1);
+                }
+                break;
+            case KtavArray array:
+                foreach (var item in array.Items) ValidateWriterValue(item, path);
+                break;
+        }
+    }
+
+    private static bool IsNativeNonFiniteSpelling(string text) =>
+        text == "NaN" || text == "Infinity" || text == "-Infinity";
 
     private static byte[] CallNative(NativeOp op, byte[] input)
     {

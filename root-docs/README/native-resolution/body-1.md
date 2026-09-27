@@ -17,8 +17,10 @@ On `net8.0`, `NativeLoader` registers a
 `<userCache>` is `%LOCALAPPDATA%` on Windows, `~/Library/Caches` on
 macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux.
 
-On `netstandard2.0` only step (2) applies — the `NativeLibrary` API
-does not exist there.
+On `netstandard2.0`, there is no custom resolver: the `KTAV_LIB_PATH`
+environment variable and the cache/download fallback are not used. Rely
+on NuGet's native asset layout or the platform's normal native-library
+search paths.
 
 >>>>> lang=ru
 ## Как резолвится нативная библиотека
@@ -40,8 +42,9 @@ does not exist there.
 `<userCache>` — это `%LOCALAPPDATA%` на Windows, `~/Library/Caches` на
 macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 
-На `netstandard2.0` работает только пункт (2) — API `NativeLibrary`
-там отсутствует.
+На `netstandard2.0` собственного резолвера нет: переменная `KTAV_LIB_PATH`
+и резервные кэш/загрузка не используются. Используйте компоновку NuGet
+с нативными файлами или стандартные пути поиска библиотек платформы.
 
 >>>>> lang=zh
 ## 原生库的解析顺序
@@ -62,5 +65,7 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 `<userCache>` 在 Windows 上是 `%LOCALAPPDATA%`，macOS 上是
 `~/Library/Caches`，Linux 上是 `$XDG_CACHE_HOME` 或 `~/.cache`。
 
-在 `netstandard2.0` 上只有第 (2) 步适用 —— 那里没有 `NativeLibrary` API。
+在 `netstandard2.0` 上没有自定义解析器：不会使用 `KTAV_LIB_PATH`
+环境变量，也不会使用缓存/下载回退。请依赖 NuGet 原生资产布局或
+平台常规的原生库搜索路径。
 

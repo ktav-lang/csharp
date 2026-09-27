@@ -16,7 +16,7 @@ package` just works.
 
 Targets **`net8.0`** (with AOT-ready `LibraryImport`) and **`netstandard2.0`**
 (`DllImport`, no `NativeLibrary` resolver — use NuGet's `runtimes/`
-layout or `KTAV_LIB_PATH`).
+layout or system native-library search paths; `KTAV_LIB_PATH` is ignored).
 
 ## Install
 
@@ -112,7 +112,7 @@ A complete runnable version lives in [`examples/Basic`](examples/Basic/Program.c
 | --- | --- |
 | `Ktav.Loads(string) -> KtavValue` | Parse a Ktav document into the `KtavValue` tree. |
 | `Ktav.LoadsStrict(string) -> KtavValue` | Parse with strict numeric spelling checks. |
-| `Ktav.Dumps(KtavValue) -> string` | Render a `KtavValue` back as Ktav text. Top-level must be `KtavObject`. |
+| `Ktav.Dumps(KtavValue) -> string` | Render a `KtavValue` back as Ktav text. Top-level must be `KtavObject` or `KtavArray`. |
 | `Ktav.DumpsForceStrings(KtavValue) -> string` | Like `Dumps`, but coerces every leaf scalar to a String via the raw `::` marker. Compounds keep their structure. |
 | `Ktav.EmitCanonical(KtavValue) -> string` | Render a `KtavValue` as canonical Ktav (spec § 5.9). |
 | `Ktav.Format(string) -> string` | Format Ktav source into its normalised spelling, **keeping every comment**. See below. |
@@ -145,9 +145,12 @@ and no blank lines, the output equals `EmitCanonical(Loads(src))`.
 
 ## Structured errors
 
-`KtavException` is thrown on any parse or render failure. Beyond the
-message it carries the same structured envelope every Ktav binding
-carries, so a tool can act on the fields instead of parsing prose:
+Native parse, format, and render failures are reported as
+`KtavException`. Beyond the message it carries the native structured
+error envelope, so a tool can act on the fields instead of parsing prose.
+This does not make every failure a `KtavException`: null arguments use
+`ArgumentNullException`, host-side argument validation uses standard .NET
+argument exceptions, and native library loading can raise loader exceptions:
 
 ```csharp
 try { Ktav.Loads("a: 1\na: 2\n"); }
@@ -191,15 +194,18 @@ no lossy coercions:
 | ---------------- | ------------------------------------------------------- |
 | `null`           | `KtavNull.Instance`                                     |
 | `true` / `false` | `KtavBool`                                              |
-| bare integer     | `KtavInteger` (text form — `ToBigInteger()` / `ToInt64()`) |
+| bare integer in the core's signed 64-bit range | `KtavInteger` (text form — `ToBigInteger()` / `ToInt64()`) |
 | bare decimal     | `KtavFloat` (text form — `ToDouble()`)                  |
 | other scalar     | `KtavString`                                            |
 | `[ ... ]`        | `KtavArray` (`IReadOnlyList<KtavValue>`)                |
 | `{ ... }`        | `KtavObject` (key insertion order preserved)            |
 
-Integers and floats are held as **text** so arbitrary precision
-(digits beyond `long`) and exact decimal round-trip are preserved byte
-for byte across parse / render cycles.
+An integer outside the core's signed 64-bit range loads as `KtavString`,
+not `KtavInteger`. `KtavInteger` and `KtavFloat` expose their stored text,
+but this does not promise arbitrary-precision Ktav numbers or preservation
+of the source's decimal spelling: for example, `1.10` loads as `1.1`.
+The public records can be constructed with other text, but native writing
+still enforces the core spec domain.
 
 ## Key escaping
 
@@ -207,10 +213,15 @@ Since spec 0.6.4 a literal `.` or `:` inside a key segment is written
 with a backslash:
 
 ```text
-a\.b: v        // key is the single segment "a.b" -> { "a.b": "v" }
-a\:b: v        // key contains a colon            -> { "a:b": "v" }
-x.y\.z: v      // split on the first dot only     -> { "x": { "y.z": "v" } }
+a\.b: v
+a\:b: v
+x.y\.z: v
 ```
+
+These parse respectively to the single keys `a.b` and `a:b`, and to the
+nested keys `x` then `y.z`. Keep explanations outside Ktav examples: inline
+`//` text is value content, not a comment. Ktav comments use a whole line
+starting with `##`.
 
 A literal backslash in a key is `\\`.
 
@@ -232,8 +243,10 @@ On `net8.0`, `NativeLoader` registers a
 `<userCache>` is `%LOCALAPPDATA%` on Windows, `~/Library/Caches` on
 macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux.
 
-On `netstandard2.0` only step (2) applies — the `NativeLibrary` API
-does not exist there.
+On `netstandard2.0`, there is no custom resolver: the `KTAV_LIB_PATH`
+environment variable and the cache/download fallback are not used. Rely
+on NuGet's native asset layout or the platform's normal native-library
+search paths.
 
 ## Runtime support
 

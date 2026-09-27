@@ -15,7 +15,9 @@
 | Файл                         | Область                                      |
 |------------------------------|----------------------------------------------|
 | `BasicTests.cs`              | Основы разбора / рендеринга / roundtrip.     |
-| `SpecConformance.cs`        | Межъязыковая конформация со спецификацией.   |
+| `SpecConformance.cs`         | Межъязыковая конформация со спецификацией.   |
+| `ReadmeDocCheckTests.cs`     | Исполняемые примеры README.                  |
+| `DocsReleaseRegressionTests.cs` | Примеры документации на трёх языках.      |
 
 ### 2. Не изобретайте формат заново в биндингах
 
@@ -53,38 +55,33 @@
 Нужно:
 
 - .NET **8 SDK** (или новее) для сборки и тестирования.
-- Rust-тулчейн через [`rustup`](https://rustup.rs/). MSRV: **1.70**.
+- Rust-тулчейн через [`rustup`](https://rustup.rs/). MSRV: **1.71**.
 
-Раскладка во время разработки — клонируйте соседние репозитории:
+Раскладка во время разработки:
 
 ```
 ktav-lang/
-├── csharp/   ← этот репозиторий
-├── rust/     ← соседний Rust-крейт (необязательно, публикуется в crates.io)
-└── spec/     ← conformance-фикстуры (git submodule)
+├── csharp/       ← этот репозиторий
+│   └── spec/     ← закреплённый сабмодуль conformance-фикстур
+└── rust/         ← соседний Rust-крейт (необязательно, опубликован в crates.io)
 ```
 
 ### Сборка
 
 ```
-cargo build --release -p ktav-ffi
-dotnet build -c Release
+cargo build --release -p ktav-cabi
+dotnet build src/Ktav/Ktav.csproj -c Release
 ```
 
 ### Тесты
 
 ```
-dotnet test -c Release
+dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release
 ```
 
 Модуль `SpecConformance` запускает межъязыковой набор фикстур из
-`ktav-lang/spec`. Он находит каталог spec через:
-
-1. Переменную окружения `KTAV_SPEC_DIR`, если задана.
-2. `<repo>/spec` (git submodule).
-3. `<repo>/../spec` (соседний fallback).
-
-Если ничего не найдено, conformance-тесты **пропускаются**, а не падают.
+`ktav-lang/spec`, читая `spec/versions/0.8/tests`. Сабмодуль должен быть
+выкачан; отсутствие корпуса приводит к падению теста, а не к пропуску.
 
 ## Языковая политика
 
