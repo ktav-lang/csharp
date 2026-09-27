@@ -19,7 +19,7 @@ const string src = """
                    db.timeout: 30
                    """;
 
-var top = (KtavObject)Ktav.Loads(src);
+var top = (KtavObject)global::Ktav.Ktav.Loads(src);
 
 string  service = ((KtavString)  top.TryGet("service")!).Value;
 long    port    = ((KtavInteger) top.TryGet("port")!).ToInt64();
@@ -52,7 +52,7 @@ const string src = """
                    db.timeout: 30
                    """;
 
-var top = (KtavObject)Ktav.Loads(src);
+var top = (KtavObject)global::Ktav.Ktav.Loads(src);
 
 string  service = ((KtavString)  top.TryGet("service")!).Value;
 long    port    = ((KtavInteger) top.TryGet("port")!).ToInt64();
@@ -85,7 +85,7 @@ const string src = """
                    db.timeout: 30
                    """;
 
-var top = (KtavObject)Ktav.Loads(src);
+var top = (KtavObject)global::Ktav.Ktav.Loads(src);
 
 string  service = ((KtavString)  top.TryGet("service")!).Value;
 long    port    = ((KtavInteger) top.TryGet("port")!).ToInt64();

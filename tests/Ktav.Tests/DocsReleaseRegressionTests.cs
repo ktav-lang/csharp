@@ -44,6 +44,61 @@ public class DocsReleaseRegressionTests
             Is.EqualTo(new KtavString("9223372036854775808")));
     }
 
+    [TestCase("en")]
+    [TestCase("ru")]
+    [TestCase("zh")]
+    public void QuickStartMatchesCompiledConsumerCode(string language)
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "root-docs", "README",
+            "quick-start-parse", "body-1.md"));
+        var marker = ">>>>> lang=" + language + "\n";
+        var start = source.IndexOf(marker);
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        start += marker.Length;
+        var end = source.IndexOf("\n>>>>> lang=", start);
+        var section = source.Substring(start, end < 0 ? source.Length - start : end - start);
+        var snippet = Regex.Match(section, "```csharp\\r?\\n([\\s\\S]*?)\\r?\\n```");
+        Assert.That(snippet.Success, Is.True);
+
+        var fixture = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "Ktav.Tests",
+            "ConsumerQuickStartFixture.cs"));
+        var imports = ExtractFixturePart(fixture, "imports").TrimEnd();
+        var body = Regex.Replace(ExtractFixturePart(fixture, "body"), "(?m)^ {8}", "").TrimEnd();
+        Assert.That(snippet.Groups[1].Value.TrimEnd(), Is.EqualTo(imports + "\n\n" + body));
+
+        var result = global::ConsumerQuickStartFixture.Run();
+        Assert.That(result.Service, Is.EqualTo("web"));
+        Assert.That(result.Port, Is.EqualTo(8080));
+        Assert.That(result.Ratio, Is.EqualTo(0.75));
+        Assert.That(result.Tls, Is.True);
+        Assert.That(result.Host, Is.EqualTo("primary.internal"));
+        Assert.That(result.Timeout, Is.EqualTo(30));
+    }
+
+    [Test]
+    public void BasicExampleInputHasDocumentedNumericTypes()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "examples", "Basic", "Program.cs"));
+        var literal = Regex.Match(source,
+            "const string Src = \"\"\"\\r?\\n([\\s\\S]*?)\\r?\\n([ \\t]*)\"\"\";");
+        Assert.That(literal.Success, Is.True);
+        var input = Regex.Replace(literal.Groups[1].Value,
+            "(?m)^" + Regex.Escape(literal.Groups[2].Value), "");
+        var value = (KtavObject)global::Ktav.Ktav.Loads(input);
+        Assert.That(value.TryGet("port"), Is.EqualTo(KtavInteger.Of(8080)));
+        Assert.That(value.TryGet("ratio"), Is.EqualTo(KtavFloat.Of(0.75)));
+        var db = (KtavObject)value.TryGet("db")!;
+        Assert.That(db.TryGet("timeout"), Is.EqualTo(KtavInteger.Of(30)));
+    }
+
+    private static string ExtractFixturePart(string fixture, string part)
+    {
+        var match = Regex.Match(fixture,
+            "(?m)^[ \\t]*// README " + part + " begin\\r?\\n([\\s\\S]*?)^[ \\t]*// README " + part + " end");
+        Assert.That(match.Success, Is.True);
+        return match.Groups[1].Value;
+    }
+
     private static string RepoRoot([CallerFilePath] string sourceFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", ".."));
 }

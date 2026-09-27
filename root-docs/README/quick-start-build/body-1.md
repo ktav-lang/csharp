@@ -24,7 +24,7 @@ var doc = new KtavObject(new[]
     new KeyValuePair<string, KtavValue>("notes",     KtavNull.Instance),
 });
 
-string text = Ktav.Dumps(doc);
+string text = global::Ktav.Ktav.Dumps(doc);
 ```
 
 A complete runnable version lives in [`examples/Basic`](examples/Basic/Program.cs).
@@ -55,7 +55,7 @@ var doc = new KtavObject(new[]
     new KeyValuePair<string, KtavValue>("notes",     KtavNull.Instance),
 });
 
-string text = Ktav.Dumps(doc);
+string text = global::Ktav.Ktav.Dumps(doc);
 ```
 
 Полный запускаемый пример — в [`examples/Basic`](../../examples/Basic/Program.cs).
@@ -86,7 +86,7 @@ var doc = new KtavObject(new[]
     new KeyValuePair<string, KtavValue>("notes",     KtavNull.Instance),
 });
 
-string text = Ktav.Dumps(doc);
+string text = global::Ktav.Ktav.Dumps(doc);
 ```
 
 完整可运行的示例见 [`examples/Basic`](../../examples/Basic/Program.cs)。

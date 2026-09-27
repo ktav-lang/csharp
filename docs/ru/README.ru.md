@@ -45,7 +45,7 @@ const string src = """
                    db.timeout: 30
                    """;
 
-var top = (KtavObject)Ktav.Loads(src);
+var top = (KtavObject)global::Ktav.Ktav.Loads(src);
 
 string  service = ((KtavString)  top.TryGet("service")!).Value;
 long    port    = ((KtavInteger) top.TryGet("port")!).ToInt64();
@@ -102,7 +102,7 @@ var doc = new KtavObject(new[]
     new KeyValuePair<string, KtavValue>("notes",     KtavNull.Instance),
 });
 
-string text = Ktav.Dumps(doc);
+string text = global::Ktav.Ktav.Dumps(doc);
 ```
 
 Полный запускаемый пример — в [`examples/Basic`](../../examples/Basic/Program.cs).
@@ -133,7 +133,7 @@ string text = Ktav.Dumps(doc);
   нет правила сортировки.
 
 ```csharp
-Ktav.Format("## why\na:   {x: 1}\n");
+global::Ktav.Ktav.Format("## why\na:   {x: 1}\n");
 // "## why\na: {\n    x: 1\n}\n"
 // the comment survives; the inline compound becomes canonical
 // multi-line form
@@ -155,7 +155,7 @@ Ktav.Format("## why\na:   {x: 1}\n");
 библиотеки может выбросить исключения загрузчика:
 
 ```csharp
-try { Ktav.Loads("a: 1\na: 2\n"); }
+try { global::Ktav.Ktav.Loads("a: 1\na: 2\n"); }
 catch (KtavException e)
 {
     Console.WriteLine(e.Error);       // "DuplicateKey"

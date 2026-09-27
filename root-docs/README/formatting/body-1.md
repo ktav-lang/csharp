@@ -11,7 +11,7 @@
   rule.
 
 ```csharp
-Ktav.Format("## why\na:   {x: 1}\n");
+global::Ktav.Ktav.Format("## why\na:   {x: 1}\n");
 // "## why\na: {\n    x: 1\n}\n"
 // the comment survives; the inline compound becomes canonical
 // multi-line form
@@ -35,7 +35,7 @@ and no blank lines, the output equals `EmitCanonical(Loads(src))`.
   нет правила сортировки.
 
 ```csharp
-Ktav.Format("## why\na:   {x: 1}\n");
+global::Ktav.Ktav.Format("## why\na:   {x: 1}\n");
 // "## why\na: {\n    x: 1\n}\n"
 // the comment survives; the inline compound becomes canonical
 // multi-line form
@@ -58,7 +58,7 @@ Ktav.Format("## why\na:   {x: 1}\n");
   排序规则。
 
 ```csharp
-Ktav.Format("## why\na:   {x: 1}\n");
+global::Ktav.Ktav.Format("## why\na:   {x: 1}\n");
 // "## why\na: {\n    x: 1\n}\n"
 // the comment survives; the inline compound becomes canonical
 // multi-line form

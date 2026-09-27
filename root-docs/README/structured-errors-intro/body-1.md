@@ -9,7 +9,7 @@ This does not make every failure a `KtavException`: null arguments use
 argument exceptions, and native library loading can raise loader exceptions:
 
 ```csharp
-try { Ktav.Loads("a: 1\na: 2\n"); }
+try { global::Ktav.Ktav.Loads("a: 1\na: 2\n"); }
 catch (KtavException e)
 {
     Console.WriteLine(e.Error);       // "DuplicateKey"
@@ -30,7 +30,7 @@ catch (KtavException e)
 библиотеки может выбросить исключения загрузчика:
 
 ```csharp
-try { Ktav.Loads("a: 1\na: 2\n"); }
+try { global::Ktav.Ktav.Loads("a: 1\na: 2\n"); }
 catch (KtavException e)
 {
     Console.WriteLine(e.Error);       // "DuplicateKey"
@@ -49,7 +49,7 @@ catch (KtavException e)
 原生库加载可能抛出加载器异常：
 
 ```csharp
-try { Ktav.Loads("a: 1\na: 2\n"); }
+try { global::Ktav.Ktav.Loads("a: 1\na: 2\n"); }
 catch (KtavException e)
 {
     Console.WriteLine(e.Error);       // "DuplicateKey"
