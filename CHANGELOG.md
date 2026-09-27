@@ -15,7 +15,7 @@ format itself — see
 
 No unreleased changes.
 
-## 0.8.0 — 2026-09-27
+## 0.8.0 — 2026-09-28
 
 ### Added
 
