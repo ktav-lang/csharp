@@ -187,6 +187,20 @@ public sealed class KtavException : Exception
         }
     }
 
+    /// <summary>
+    /// Pure-backend construction path: build the same typed exception the
+    /// native envelope would have produced. <paramref name="message"/> must
+    /// be the verbatim Rust <c>Display</c> rendering of the error.
+    /// </summary>
+    internal static KtavException FromPure(string message, string error, string? reason,
+        int? line, string? lineText, KtavErrorSpan? span,
+        IReadOnlyList<string>? path, string? body, string? canonical,
+        string? specSection)
+    {
+        return new KtavException(message, error, reason, line, lineText,
+            span, path, body, canonical, specSection);
+    }
+
     internal static KtavException WriterError(string reason, IReadOnlyList<string> path)
     {
         var message = "UnrepresentableAt: " + reason;

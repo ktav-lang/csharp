@@ -14,8 +14,8 @@ internal sealed class CorpusManifest
     internal static readonly IReadOnlyDictionary<string, int> PinnedCounts =
         new Dictionary<string, int>
         {
-            ["valid"] = 223,
-            ["invalid"] = 74,
+            ["valid"] = 228,
+            ["invalid"] = 90,
             ["unrepresentable"] = 5,
             ["parseable-unrepresentable"] = 4,
             ["strict-lossy"] = 13,

@@ -137,7 +137,10 @@ public class SpecConformance
     }
 
     [TestCaseSource(nameof(ValidCases))]
-    public void Valid(string ktavPath)
+    [Category("NativeOnly")]
+    public void Valid(string ktavPath) => ValidCore(ktavPath, KtavBackend.Native);
+
+    internal static void ValidCore(string ktavPath, KtavBackend backend)
     {
         var oraclePath = Path.ChangeExtension(ktavPath, ".json");
         Assert.That(File.Exists(oraclePath), $"oracle JSON missing: {oraclePath}");
@@ -145,7 +148,7 @@ public class SpecConformance
         var src = File.ReadAllText(ktavPath);
         var oracleBytes = File.ReadAllBytes(oraclePath);
 
-        var got = Ktav.Loads(src);
+        var got = Ktav.Loads(src, backend);
 
         // Decode the oracle through the same wire reader so bare numbers
         // become KtavInteger / KtavFloat — matching what cabi emits via
@@ -165,7 +168,10 @@ public class SpecConformance
     /// through this same comparison.
     /// </summary>
     [TestCaseSource(nameof(ValidCanonicalCases))]
-    public void ValidCanonical(string ktavPath)
+    [Category("NativeOnly")]
+    public void ValidCanonical(string ktavPath) => ValidCanonicalCore(ktavPath, KtavBackend.Native);
+
+    internal static void ValidCanonicalCore(string ktavPath, KtavBackend backend)
     {
         var canonicalPath = CanonicalCompanionPath(ktavPath);
         Assert.That(File.Exists(canonicalPath), $"canonical companion missing: {canonicalPath}");
@@ -173,8 +179,8 @@ public class SpecConformance
         var src = File.ReadAllText(ktavPath);
         var expectedBytes = File.ReadAllBytes(canonicalPath);
 
-        var value = Ktav.Loads(src);
-        var actualBytes = System.Text.Encoding.UTF8.GetBytes(Ktav.EmitCanonical(value));
+        var value = Ktav.Loads(src, backend);
+        var actualBytes = System.Text.Encoding.UTF8.GetBytes(Ktav.EmitCanonical(value, backend));
 
         Assert.That(actualBytes, Is.EqualTo(expectedBytes),
             $"canonical mismatch for {ktavPath}\n" +
@@ -183,7 +189,10 @@ public class SpecConformance
     }
 
     [TestCaseSource(nameof(InvalidCases))]
-    public void Invalid(string ktavPath)
+    [Category("NativeOnly")]
+    public void Invalid(string ktavPath) => InvalidCore(ktavPath, KtavBackend.Native);
+
+    internal static void InvalidCore(string ktavPath, KtavBackend backend)
     {
         var raw = File.ReadAllBytes(ktavPath);
         var oraclePath = Path.ChangeExtension(ktavPath, ".json");
@@ -192,7 +201,7 @@ public class SpecConformance
 
         if (Fixture("invalid", ktavPath).Flags.Contains("raw_bytes"))
         {
-            var error = Assert.Throws<KtavException>(() => Ktav.LoadsUtf8(raw),
+            var error = Assert.Throws<KtavException>(() => Ktav.LoadsUtf8(raw, backend),
                 $"expected invalid-UTF-8 rejection for {ktavPath}")!;
             Assert.That(error.Error, Is.EqualTo("InvalidUtf8"), $"error class for {ktavPath}");
             Assert.That(error.SpecSection, Is.EqualTo("§6.15"), $"spec section for {ktavPath}");
@@ -203,7 +212,7 @@ public class SpecConformance
 
         Assert.That(TryDecodeStrictUtf8(raw, out var src), Is.True,
             $"malformed UTF-8 fixture missing raw_bytes flag: {ktavPath}");
-        var parseError = Assert.Throws<KtavException>(() => Ktav.Loads(src),
+        var parseError = Assert.Throws<KtavException>(() => Ktav.Loads(src, backend),
             $"expected parse error for {ktavPath}")!;
         AssertInvalidOracle(parseError, expected, ktavPath);
     }
@@ -267,7 +276,10 @@ public class SpecConformance
     }
 
     [TestCaseSource(nameof(UnrepresentableCases))]
-    public void Unrepresentable(string jsonPath)
+    [Category("NativeOnly")]
+    public void Unrepresentable(string jsonPath) => UnrepresentableCore(jsonPath, KtavBackend.Native);
+
+    internal static void UnrepresentableCore(string jsonPath, KtavBackend backend)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
         var root = doc.RootElement;
@@ -275,22 +287,25 @@ public class SpecConformance
         var reason = root.GetProperty("unrepresentable_reason").GetString();
         var (expectedReason, expectedSection) = ReasonContract(reason!);
 
-        var dumpsError = Assert.Throws<KtavException>(() => Ktav.Dumps(value),
+        var dumpsError = Assert.Throws<KtavException>(() => Ktav.Dumps(value, backend),
             $"Dumps should refuse unrepresentable value ({reason}): {jsonPath}");
-        var canonicalError = Assert.Throws<KtavException>(() => Ktav.EmitCanonical(value),
+        var canonicalError = Assert.Throws<KtavException>(() => Ktav.EmitCanonical(value, backend),
             $"EmitCanonical should refuse unrepresentable value ({reason}): {jsonPath}");
         AssertUnrepresentableError(dumpsError!, expectedReason, expectedSection, jsonPath);
         AssertUnrepresentableError(canonicalError!, expectedReason, expectedSection, jsonPath);
     }
 
     [TestCaseSource(nameof(ParseableUnrepresentableCases))]
-    public void ParseableUnrepresentable(string ktavPath)
+    [Category("NativeOnly")]
+    public void ParseableUnrepresentable(string ktavPath) => ParseableUnrepresentableCore(ktavPath, KtavBackend.Native);
+
+    internal static void ParseableUnrepresentableCore(string ktavPath, KtavBackend backend)
     {
         var oraclePath = Path.ChangeExtension(ktavPath, ".json");
         Assert.That(File.Exists(oraclePath), $"oracle JSON missing: {oraclePath}");
 
         var src = File.ReadAllText(ktavPath);
-        var got = Ktav.Loads(src);
+        var got = Ktav.Loads(src, backend);
 
         using var doc = JsonDocument.Parse(File.ReadAllText(oraclePath));
         var root = doc.RootElement;
@@ -300,9 +315,9 @@ public class SpecConformance
         Assert.That(ValueEquals(want, got),
             $"mismatch for {ktavPath}\nsrc:\n{src}\nwant: {want}\ngot:  {got}");
 
-        var dumpsError = Assert.Throws<KtavException>(() => Ktav.Dumps(got),
+        var dumpsError = Assert.Throws<KtavException>(() => Ktav.Dumps(got, backend),
             $"Dumps should refuse unrepresentable value ({reason}): {ktavPath}");
-        var canonicalError = Assert.Throws<KtavException>(() => Ktav.EmitCanonical(got),
+        var canonicalError = Assert.Throws<KtavException>(() => Ktav.EmitCanonical(got, backend),
             $"EmitCanonical should refuse unrepresentable value ({reason}): {ktavPath}");
         var (expectedReason, expectedSection) = ReasonContract(reason!);
         AssertUnrepresentableError(dumpsError!, expectedReason, expectedSection, ktavPath);
@@ -315,7 +330,10 @@ public class SpecConformance
     /// refuses it with <c>LossyScalar</c> naming the exact body/canonical.
     /// </summary>
     [TestCaseSource(nameof(StrictLossyCases))]
-    public void StrictLossy(string ktavPath)
+    [Category("NativeOnly")]
+    public void StrictLossy(string ktavPath) => StrictLossyCore(ktavPath, KtavBackend.Native);
+
+    internal static void StrictLossyCore(string ktavPath, KtavBackend backend)
     {
         var oraclePath = Path.ChangeExtension(ktavPath, ".json");
         Assert.That(File.Exists(oraclePath), $"oracle JSON missing: {oraclePath}");
@@ -325,11 +343,11 @@ public class SpecConformance
         var root = doc.RootElement;
         var want = WireJson.Decode(System.Text.Encoding.UTF8.GetBytes(root.GetProperty("lax_value").GetRawText()));
 
-        var got = Ktav.Loads(src);
+        var got = Ktav.Loads(src, backend);
         Assert.That(ValueEquals(want, got),
             $"lax mismatch for {ktavPath}\nsrc:\n{src}\nwant: {want}\ngot:  {got}");
 
-        var ex = Assert.Throws<KtavException>(() => Ktav.LoadsStrict(src),
+        var ex = Assert.Throws<KtavException>(() => Ktav.LoadsStrict(src, backend),
             $"LoadsStrict should refuse {ktavPath}")!;
         Assert.That(ex.Error, Is.EqualTo(root.GetProperty("expected_error").GetString()), $"error class for {ktavPath}");
         Assert.That(ex.Body, Is.EqualTo(root.GetProperty("body").GetString()), $"body for {ktavPath}");
@@ -350,7 +368,7 @@ public class SpecConformance
         Assert.That(Manifest().CategoriesByName.Keys, Is.EquivalentTo(CorpusManifest.PinnedCounts.Keys));
     }
 
-    private static (string Reason, string Section) ReasonContract(string reason) => reason switch
+    internal static (string Reason, string Section) ReasonContract(string reason) => reason switch
     {
         "ScalarRoot" => ("ScalarRoot", "§5.9.0"),
         "NonFiniteFloat" => ("NonFiniteFloat", "§5.9.0"),
@@ -362,7 +380,7 @@ public class SpecConformance
         _ => throw new AssertionException($"unknown unrepresentable_reason: {reason}"),
     };
 
-    private static void AssertUnrepresentableError(KtavException error, string reason, string section, string path)
+    internal static void AssertUnrepresentableError(KtavException error, string reason, string section, string path)
     {
         Assert.That(error.Error, Is.EqualTo("UnrepresentableAt"), $"error class for {path}");
         Assert.That(error.Reason, Is.EqualTo(reason), $"reason for {path}");
@@ -377,7 +395,7 @@ public class SpecConformance
     /// Numbers keep their raw text, split into Integer/Float the same
     /// way the wire reader does.
     /// </summary>
-    private static KtavValue FixtureValueToKtav(JsonElement el)
+    internal static KtavValue FixtureValueToKtav(JsonElement el)
     {
         switch (el.ValueKind)
         {
@@ -420,7 +438,7 @@ public class SpecConformance
     /// <c>2.5e+8</c> where the source Ktav had <c>2.5E+8</c>). Integers
     /// compare by <see cref="BigInteger"/>.
     /// </summary>
-    private static bool ValueEquals(KtavValue a, KtavValue b)
+    internal static bool ValueEquals(KtavValue a, KtavValue b)
     {
         if (ReferenceEquals(a, b)) return true;
         if (a is KtavFloat fa && b is KtavFloat fb)

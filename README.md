@@ -24,6 +24,10 @@ layout or system native-library search paths; `KTAV_LIB_PATH` is ignored).
 dotnet add package Ktav
 ```
 
+The package also works with no native binary at all — see
+[Pure backend](#pure-backend) (`Ktav.UsePureBackend()` or
+`KtavBackend.Pure` per call).
+
 ## Quick start
 
 ### Parse — pull typed fields out of a document
@@ -225,6 +229,52 @@ starting with `##`.
 
 A literal backslash in a key is `\\`.
 
+## The pure backend (no native binary)
+
+Since 0.8.1 the library ships a complete managed parser, writer,
+canonical emitter and comment-preserving formatter. It is designed to
+produce the same output and error envelopes as the Rust-backed native
+backend; parity is enforced by the CI conformance and cross-backend
+suites. It never loads, downloads or shells out to a native
+binary — useful for AOT-strict, air-gapped or no-native-artifact
+environments.
+
+Choose it globally:
+
+```csharp
+Ktav.UsePureBackend();   // process-wide default; UseNativeBackend() reverts
+var doc = Ktav.Loads("a: 1\n");
+```
+
+…or per call (this parameter always wins over the process default):
+
+```csharp
+var doc = Ktav.Loads(src, KtavBackend.Pure);
+var outText = Ktav.Dumps(doc, KtavBackend.Pure);
+var canon = Ktav.EmitCanonical(doc, KtavBackend.Pure);
+var formatted = Ktav.Format(src, KtavBackend.Pure);
+var strict = Ktav.LoadsStrict(src, KtavBackend.Pure);
+```
+
+The `KTAV_BACKEND=pure` environment variable sets the initial default
+(handled once at startup), which is how the pure CI job runs the whole
+test suite without a native build.
+
+Limits and guarantees:
+
+- The error envelope contract (messages, categories, spec sections, byte
+  spans) is designed to match the native backend; parity is enforced by
+  the CI conformance and cross-backend suites. Spans are UTF-8
+  **original-byte** offsets (BOM
+  and CRLF bytes included, never subtracted).
+- Thread-safety: `UsePureBackend()` / `UseNativeBackend()` swap the
+  process-wide default atomically (`Interlocked`); each call copies the
+  backend choice once at entry, so a mid-flight flip cannot tear a call.
+  The per-call parameter is authoritative — prefer setting the default
+  once at startup, or always passing it explicitly.
+- `NativeVersion()` still refers to the native library and requires it;
+  everything else works without any native artifact.
+
 ## How the native library is resolved
 
 On `net8.0`, `NativeLoader` registers a
@@ -247,6 +297,11 @@ On `netstandard2.0`, there is no custom resolver: the `KTAV_LIB_PATH`
 environment variable and the cache/download fallback are not used. Rely
 on NuGet's native asset layout or the platform's normal native-library
 search paths.
+
+
+All of the above applies to the **native** backend only. The pure
+managed backend ([Pure backend](#pure-backend)) never consults
+`$KTAV_LIB_PATH`, the `runtimes/` layout, the cache or the network.
 
 ## Runtime support
 

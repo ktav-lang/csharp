@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace Ktav;
 
@@ -32,20 +33,80 @@ namespace Ktav;
 /// </remarks>
 public static class Ktav
 {
+    // Process-wide default backend. 0 = Native, 1 = Pure. Swapped with
+    // Interlocked so a default flip is atomic and race-free; per-call
+    // parameters remain the authoritative choice.
+    // Initial value: Native unless the process (e.g. the pure-backend CI
+    // job) exports KTAV_BACKEND=pure. Read once at type initialization;
+    // use UsePureBackend()/UseNativeBackend() to change it afterwards.
+    private static int _backend =
+        Environment.GetEnvironmentVariable("KTAV_BACKEND") == "pure"
+            ? (int)KtavBackend.Pure
+            : (int)KtavBackend.Native;
+
+    /// <summary>The process-wide default backend (initially
+    /// <see cref="KtavBackend.Native"/>). Individual calls that pass an explicit
+    /// backend ignore this value.</summary>
+    public static KtavBackend DefaultBackend => (KtavBackend)Volatile.Read(ref _backend);
+
+    /// <summary>Make the managed pure implementation the process-wide default.
+    /// Pure mode never loads or downloads a native binary.</summary>
+    public static void UsePureBackend() => Interlocked.Exchange(ref _backend, (int)KtavBackend.Pure);
+
+    /// <summary>Restore the Rust-backed native library as the process-wide
+    /// default (the initial state).</summary>
+    public static void UseNativeBackend() => Interlocked.Exchange(ref _backend, (int)KtavBackend.Native);
+
+    private static bool IsPure(KtavBackend backend) => backend == KtavBackend.Pure;
+
     /// <summary>Parse a Ktav document into a <see cref="KtavValue"/>.</summary>
     /// <exception cref="KtavException">on any parse error.</exception>
-    public static KtavValue Loads(string src)
+    public static KtavValue Loads(string src) => Loads(src, DefaultBackend);
+
+    /// <summary>Parse a Ktav document into a <see cref="KtavValue"/>, choosing
+    /// the implementation explicitly (overrides the process-wide default).</summary>
+    /// <exception cref="KtavException">on any parse error.</exception>
+    public static KtavValue Loads(string src, KtavBackend backend)
     {
         if (src == null) throw new ArgumentNullException(nameof(src));
-        NativeLoader.EnsureRegistered();
         var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureParser.ParseLax(bytes);
+        NativeLoader.EnsureRegistered();
         var output = CallNative(NativeOp.Loads, bytes);
         return WireJson.Decode(output);
     }
 
-    internal static KtavValue LoadsUtf8(byte[] source)
+    internal static KtavValue LoadsUtf8(byte[] source) => LoadsUtf8(source, DefaultBackend);
+
+    internal static KtavValue LoadsUtf8(byte[] source, KtavBackend backend)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
+        ValidateUtf8OrThrow(source);
+        if (IsPure(backend)) return Pure.PureParser.ParseValidated(source, strict: false);
+        NativeLoader.EnsureRegistered();
+        var output = CallNative(NativeOp.Loads, source);
+        return WireJson.Decode(output);
+    }
+
+    /// <summary>Parse a Ktav document with strict numeric spelling checks.</summary>
+    /// <exception cref="KtavException">when strict parsing rejects the source.</exception>
+    public static KtavValue LoadsStrict(string src) => LoadsStrict(src, DefaultBackend);
+
+    /// <summary>Parse a Ktav document with strict numeric spelling checks,
+    /// choosing the implementation explicitly.</summary>
+    /// <exception cref="KtavException">when strict parsing rejects the source.</exception>
+    public static KtavValue LoadsStrict(string src, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureParser.ParseStrict(bytes);
+        NativeLoader.EnsureRegistered();
+        var output = CallNative(NativeOp.LoadsStrict, bytes);
+        return WireJson.Decode(output);
+    }
+
+    private static void ValidateUtf8OrThrow(byte[] source)
+    {
         try
         {
             new UTF8Encoding(false, true).GetCharCount(source);
@@ -58,21 +119,6 @@ public static class Ktav
             var end = (int)Math.Min(source.Length, (long)start + count);
             throw KtavException.InvalidUtf8(start, end);
         }
-
-        NativeLoader.EnsureRegistered();
-        var output = CallNative(NativeOp.Loads, source);
-        return WireJson.Decode(output);
-    }
-
-    /// <summary>Parse a Ktav document with strict numeric spelling checks.</summary>
-    /// <exception cref="KtavException">when strict parsing rejects the source.</exception>
-    public static KtavValue LoadsStrict(string src)
-    {
-        if (src == null) throw new ArgumentNullException(nameof(src));
-        NativeLoader.EnsureRegistered();
-        var bytes = Encoding.UTF8.GetBytes(src);
-        var output = CallNative(NativeOp.LoadsStrict, bytes);
-        return WireJson.Decode(output);
     }
 
     /// <summary>
@@ -82,12 +128,17 @@ public static class Ktav
     /// rejected.
     /// </summary>
     /// <exception cref="KtavException">on any render error.</exception>
-    public static string Dumps(KtavValue value)
+    public static string Dumps(KtavValue value) => Dumps(value, DefaultBackend);
+
+    /// <inheritdoc cref="Dumps(KtavValue)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string Dumps(KtavValue value, KtavBackend backend)
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
         if (value is not (KtavObject or KtavArray))
             throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
-        ValidateWriterValue(value, new List<string>());
+        ValidateWriterValue(value);
+        if (IsPure(backend)) return Pure.PureWriter.Dumps(value);
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value);
         var output = CallNative(NativeOp.Dumps, input);
@@ -109,11 +160,16 @@ public static class Ktav
     /// must be a <see cref="KtavObject"/> or <see cref="KtavArray"/>.
     /// </remarks>
     /// <exception cref="KtavException">on any render error.</exception>
-    public static string DumpsForceStrings(KtavValue value)
+    public static string DumpsForceStrings(KtavValue value) => DumpsForceStrings(value, DefaultBackend);
+
+    /// <inheritdoc cref="DumpsForceStrings(KtavValue)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string DumpsForceStrings(KtavValue value, KtavBackend backend)
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
         if (value is not (KtavObject or KtavArray))
             throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
+        if (IsPure(backend)) return Pure.PureWriter.DumpsForceStrings(value);
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value, forceStrings: true);
         var output = CallNative(NativeOp.DumpsForceStrings, input);
@@ -132,12 +188,17 @@ public static class Ktav
     /// <see cref="KtavArray"/>.
     /// </remarks>
     /// <exception cref="KtavException">on any render error.</exception>
-    public static string EmitCanonical(KtavValue value)
+    public static string EmitCanonical(KtavValue value) => EmitCanonical(value, DefaultBackend);
+
+    /// <inheritdoc cref="EmitCanonical(KtavValue)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string EmitCanonical(KtavValue value, KtavBackend backend)
     {
         if (value == null) throw new ArgumentNullException(nameof(value));
         if (value is not (KtavObject or KtavArray))
             throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
-        ValidateWriterValue(value, new List<string>());
+        ValidateWriterValue(value);
+        if (IsPure(backend)) return Pure.PureCanonical.Emit(value);
         NativeLoader.EnsureRegistered();
         var input = WireJson.Encode(value);
         var output = CallNative(NativeOp.EmitCanonical, input);
@@ -161,11 +222,20 @@ public static class Ktav
     /// <param name="src">Ktav source text to reformat.</param>
     /// <returns>The canonically formatted Ktav source text.</returns>
     /// <exception cref="KtavException">on any format error.</exception>
-    public static string Format(string src)
+    public static string Format(string src) => Format(src, DefaultBackend);
+
+    /// <inheritdoc cref="Format(string)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string Format(string src, KtavBackend backend)
     {
         if (src == null) throw new ArgumentNullException(nameof(src));
-        NativeLoader.EnsureRegistered();
         var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend))
+        {
+            ValidateUtf8OrThrow(bytes);
+            return Pure.PureFormatter.Format(bytes);
+        }
+        NativeLoader.EnsureRegistered();
         var output = CallNative(NativeOp.Format, bytes);
         return Encoding.UTF8.GetString(output);
     }
@@ -182,11 +252,17 @@ public static class Ktav
     /// <param name="src">Ktav source text.</param>
     /// <returns>Canonical Ktav source text.</returns>
     /// <exception cref="KtavException">on any parse or render error.</exception>
-    public static string CanonicalFromSource(string src)
+    public static string CanonicalFromSource(string src) => CanonicalFromSource(src, DefaultBackend);
+
+    /// <inheritdoc cref="CanonicalFromSource(string)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string CanonicalFromSource(string src, KtavBackend backend)
     {
         if (src == null) throw new ArgumentNullException(nameof(src));
-        NativeLoader.EnsureRegistered();
         var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend))
+            return Pure.PureCanonical.Emit(Pure.PureParser.ParseLax(bytes));
+        NativeLoader.EnsureRegistered();
         var output = CallNative(NativeOp.CanonicalFromSource, bytes);
         return Encoding.UTF8.GetString(output);
     }
@@ -211,26 +287,67 @@ public static class Ktav
 
     private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource }
 
-    private static void ValidateWriterValue(KtavValue value, List<string> path)
+    /// <summary>
+    /// Pre-flight §5.9.0 validation of an untrusted value tree. Iterative
+    /// (explicit frame stack): runs before the emitters on every
+    /// Dumps/EmitCanonical, and deep untrusted trees must not overflow the
+    /// host stack. Same traversal order and error semantics as the previous
+    /// recursive walk: depth-first, entries in insertion order, arrays leave
+    /// the key path untouched; EmptyKeyName is thrown with the path including
+    /// the offending key, NonFiniteFloat with the path at the float.
+    /// </summary>
+    private static void ValidateWriterValue(KtavValue root)
     {
+        var path = new List<string>();
+        var frames = new List<VFrame>();
+        PushValidate(frames, path, root);
+        while (frames.Count > 0)
+        {
+            var f = frames[frames.Count - 1];
+            if (f.Obj != null)
+            {
+                if (f.PrevKey != null) { path.RemoveAt(path.Count - 1); f.PrevKey = null; }
+                if (f.Next >= f.Obj.Entries.Count) { frames.RemoveAt(frames.Count - 1); continue; }
+                var e = f.Obj.Entries[f.Next++];
+                path.Add(e.Key);
+                f.PrevKey = e.Key;
+                if (e.Key.Length == 0)
+                    throw KtavException.WriterError("EmptyKeyName", path.ToArray());
+                PushValidate(frames, path, e.Value);
+            }
+            else
+            {
+                if (f.Next >= f.Arr!.Items.Count) { frames.RemoveAt(frames.Count - 1); continue; }
+                PushValidate(frames, path, f.Arr.Items[f.Next++]);
+            }
+        }
+    }
+
+    /// <summary>Check one value; queue a frame when compound. Float spellings
+    /// are checked before descending (document order).</summary>
+    private static void PushValidate(List<VFrame> frames, List<string> path, KtavValue value)
+    {
+        if (value is KtavFloat fl && IsNativeNonFiniteSpelling(fl.Text))
+            throw KtavException.WriterError("NonFiniteFloat", path.ToArray());
         switch (value)
         {
-            case KtavFloat f when IsNativeNonFiniteSpelling(f.Text):
-                throw KtavException.WriterError("NonFiniteFloat", path.ToArray());
-            case KtavObject obj:
-                foreach (var entry in obj.Entries)
-                {
-                    path.Add(entry.Key);
-                    if (entry.Key.Length == 0)
-                        throw KtavException.WriterError("EmptyKeyName", path.ToArray());
-                    ValidateWriterValue(entry.Value, path);
-                    path.RemoveAt(path.Count - 1);
-                }
+            case KtavObject o when o.Entries.Count > 0:
+                frames.Add(new VFrame(o));
                 break;
-            case KtavArray array:
-                foreach (var item in array.Items) ValidateWriterValue(item, path);
+            case KtavArray a when a.Items.Count > 0:
+                frames.Add(new VFrame(a));
                 break;
         }
+    }
+
+    private sealed class VFrame
+    {
+        public readonly KtavObject? Obj;
+        public readonly KtavArray? Arr;
+        public int Next;
+        public string? PrevKey;
+        public VFrame(KtavObject obj) { Obj = obj; }
+        public VFrame(KtavArray arr) { Arr = arr; }
     }
 
     private static bool IsNativeNonFiniteSpelling(string text) =>

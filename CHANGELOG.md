@@ -13,7 +13,22 @@ format itself — see
 
 ## Unreleased
 
-No unreleased changes.
+### Added
+
+- A complete pure managed backend (shipped in 0.8.1) (`KtavBackend.Pure`): parser
+  (lax/strict), writer, force-strings writer, canonical emitter and the
+  comment-preserving formatter, all in managed code with no native
+  binary. Choose it with `Ktav.UsePureBackend()`, the per-call
+  `KtavBackend` parameter on every operation, or the
+  `KTAV_BACKEND=pure` environment variable. Designed to produce the same
+  output and error envelopes as the native backend; parity is enforced
+  by the CI conformance and cross-backend suites. Error spans remain
+  original UTF-8 byte offsets.
+
+### Changed
+
+- Upgraded to Rust `ktav` 0.8.1 (spec 0.8.1) and bumped the package
+  version to 0.8.1.
 
 ## 0.8.0 — 2026-09-28
 

@@ -64,11 +64,44 @@ jobs:
         with:
           dotnet-version: ${{ matrix.dotnet }}
 
+      # Cargo.lock is committed pinned to the previous ktav patch
+      # release; move it to 0.8.1 explicitly so the build is reproducible
+      # instead of implicitly lockfile-updating.
+      - name: Pin ktav dependency to 0.8.1
+        run: cargo update -p ktav --precise 0.8.1
+
       - name: Build native library
         run: cargo build --release -p ktav-cabi
 
       - name: dotnet test
         run: dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release --logger "console;verbosity=normal"
+
+  # Full suite against the PURE managed backend, WITHOUT any cargo /
+  # native build step: no ktav_cabi exists in this job, so any accidental
+  # native fallback fails instead of silently passing. KTAV_BACKEND=pure
+  # sets the process default; the "NativeOnly" category is excluded.
+  # The corpus guard (CorpusManifest pinned counts) fails closed when the
+  # spec submodule is missing or drifted.
+  test-pure:
+    name: pure backend / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      KTAV_BACKEND: pure
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: dotnet test (pure backend, no native build)
+        run: dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release --filter "Category!=NativeOnly" --logger "console;verbosity=normal"
 
   lint-rust:
     name: rust clippy + fmt
@@ -96,3 +129,158 @@ jobs:
           name: nupkg
           path: pkg/*.nupkg
           retention-days: 7
+
+  # Import-without-native proof: pack the package from a source checkout
+  # (NO native runtimes present — exactly the consumer scenario), build a
+  # scratch console app in $RUNNER_TEMP against the local nupkg, and run
+  # it TWICE, isolated by the KTAV_BACKEND environment:
+  #   run 1 (env removed): the packaged STARTUP default must be
+  #     KtavBackend.Native — observed from the enum alone, no native load
+  #     attempted — and every explicit per-call KtavBackend.Pure
+  #     operation must succeed with no native artifact anywhere. A wrong
+  #     default FAILS the job; the app never calls UsePureBackend() to
+  #     paper over it.
+  #   run 2 (KTAV_BACKEND=pure): the default must be Pure and the
+  #     default-argument operations must succeed.
+  # Each run prints a distinct marker; the steps grep-require BOTH
+  # markers so a missing/failed run FAILS the job (never skips).
+  packaged-consumer:
+    name: packaged import without native
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # (a) Pack from source: no ktav_cabi was built, so the package
+      # ships zero native assets.
+      - name: Pack the package (no native runtimes in a source checkout)
+        run: dotnet pack src/Ktav/Ktav.csproj -c Release -o "$RUNNER_TEMP/ktav-pkg"
+
+      # (b) Scratch consumer project, entirely under $RUNNER_TEMP.
+      - name: Create consumer project in RUNNER_TEMP
+        run: |
+          set -e
+          mkdir -p "$RUNNER_TEMP/ktav-pkg-consumer"
+          cd "$RUNNER_TEMP/ktav-pkg-consumer"
+          # Pin the ONLY package source to the local folder so the import
+          # provably comes from the just-packed nupkg, never nuget.org.
+          cat > nuget.config <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="local-pack" value="PACKDIR_PLACEHOLDER" />
+            </packageSources>
+          </configuration>
+          EOF
+          sed -i "s|PACKDIR_PLACEHOLDER|$RUNNER_TEMP/ktav-pkg|" nuget.config
+          dotnet new console -n KtavPkgConsumer -o . --force
+          dotnet add package Ktav --version 0.8.1
+
+          # Fully qualified global::Ktav.Ktav.* calls: the namespace Ktav
+          # also contains a type named Ktav, so `using Ktav;` + bare
+          # `Ktav.Loads` would resolve ambiguously (CS0104). Args[0] picks
+          # the mode; each mode exercises the full pure surface.
+          cat > Program.cs <<'EOF'
+          using Ktav;
+
+          // Packaged import, no native lib. Exits non-zero on any
+          // failure; prints the mode's marker on success.
+          //   args[0] == "default-native": startup default must be
+          //     Native (enum check only, no native load); all operations
+          //     use explicit per-call KtavBackend.Pure.
+          //   args[0] == "default-pure": default must be Pure; all
+          //     operations use the default-argument overloads.
+          if (args.Length != 1 || (args[0] != "default-native" && args[0] != "default-pure"))
+          {
+              Console.Error.WriteLine("usage: dotnet run -- default-native|default-pure");
+              return 1;
+          }
+          bool nativeDefault = args[0] == "default-native";
+          string markerOk = nativeDefault ? "KTAV_PACKAGED_NATIVE_DEFAULT_OK"
+                                          : "KTAV_PACKAGED_PURE_DEFAULT_OK";
+          KtavBackend runDefault = nativeDefault ? KtavBackend.Native
+                                                 : KtavBackend.Pure;
+          const string lossy = "version: 1.10\n";
+
+          try
+          {
+              // Startup-default honesty: with KTAV_BACKEND unset the
+              // packaged default is Native; with KTAV_BACKEND=pure it is
+              // Pure. A wrong default fails the run — never patched up
+              // by UsePureBackend().
+              if (global::Ktav.Ktav.DefaultBackend != runDefault)
+                  throw new InvalidOperationException(
+                      $"DefaultBackend was {global::Ktav.Ktav.DefaultBackend}, expected {runDefault}");
+
+              // Full pure-surface exercise through the PUBLIC API. Dotted
+              // key "a.b" nests a→b (TryGet is a literal single-level
+              // lookup), so traverse both levels explicitly.
+              var v = (KtavObject)global::Ktav.Ktav.Loads(
+                  "a.b: [1, 2]\nc: :: raw\nbig: 99999999999999999999999999999\n",
+                  KtavBackend.Pure);
+              var a = (KtavObject)v.TryGet("a")!;
+              if (((KtavArray)a.TryGet("b")!).Items.Count != 2)
+                  throw new InvalidOperationException("Loads");
+              if (((KtavString)v.TryGet("big")!).Value != "99999999999999999999999999999")
+                  throw new InvalidOperationException("overflow numeral must be String");
+
+              try
+              {
+                  global::Ktav.Ktav.LoadsStrict(lossy, KtavBackend.Pure);
+                  throw new InvalidOperationException("strict must fail");
+              }
+              catch (KtavException e)
+              {
+                  if (e.Error != "LossyScalar") throw new InvalidOperationException(
+                      $"expected LossyScalar, got {e.Error}");
+              }
+
+              if (global::Ktav.Ktav.Dumps(v, KtavBackend.Pure).Length == 0)
+                  throw new InvalidOperationException("Dumps");
+              if (global::Ktav.Ktav.DumpsForceStrings(v, KtavBackend.Pure).Length == 0)
+                  throw new InvalidOperationException("DumpsForceStrings");
+              if (global::Ktav.Ktav.EmitCanonical(v, KtavBackend.Pure).Length == 0)
+                  throw new InvalidOperationException("EmitCanonical");
+              if (global::Ktav.Ktav.Format("## c\na:   1\n", KtavBackend.Pure).Length == 0)
+                  throw new InvalidOperationException("Format");
+              if (global::Ktav.Ktav.CanonicalFromSource("a: 1\n", KtavBackend.Pure) == null)
+                  throw new InvalidOperationException("CanonicalFromSource");
+          }
+          catch (Exception e)
+          {
+              Console.Error.WriteLine($"{markerOk.Replace("_OK", "_FAILED")}: {e}");
+              return 1;
+          }
+
+          Console.WriteLine(markerOk);
+          return 0;
+          EOF
+
+      # (c) Run 1: KTAV_BACKEND explicitly REMOVED — proves the packaged
+      # startup default is Native (enum observation only) and that every
+      # explicit pure operation succeeds with zero native artifacts.
+      - name: Run consumer (env unset: default must be Native, pure per-call ops)
+        run: |
+          set -e
+          cd "$RUNNER_TEMP/ktav-pkg-consumer"
+          unset KTAV_LIB_PATH || true
+          env -u KTAV_BACKEND dotnet run -c Release --no-restore -- default-native | tee consumer-native-default.txt
+          grep -q "KTAV_PACKAGED_NATIVE_DEFAULT_OK" consumer-native-default.txt
+
+      # (d) Run 2: KTAV_BACKEND=pure — default must be Pure and the
+      # default-argument operations must succeed. (Fresh process: the
+      # static initializer re-reads the env var.)
+      - name: Run consumer (KTAV_BACKEND=pure: default must be Pure, default-arg ops)
+        run: |
+          set -e
+          cd "$RUNNER_TEMP/ktav-pkg-consumer"
+          unset KTAV_LIB_PATH || true
+          export KTAV_BACKEND=pure
+          dotnet run -c Release --no-restore -- default-pure | tee consumer-pure-default.txt
+          grep -q "KTAV_PACKAGED_PURE_DEFAULT_OK" consumer-pure-default.txt

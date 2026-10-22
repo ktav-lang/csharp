@@ -23,6 +23,9 @@
 dotnet add package Ktav
 ```
 
+本包无需任何原生二进制也能开箱即用 —— 参见[纯托管后端](#pure-backend)
+（`Ktav.UsePureBackend()` 或按调用传入 `KtavBackend.Pure`）。
+
 ## 快速开始
 
 ### 解析 —— 取出带类型的字段
@@ -216,6 +219,46 @@ x.y\.z: v
 
 键中的字面量反斜杠写作 `\\`。
 
+## 纯托管后端（无需原生二进制）
+
+从 0.8.1 起，本库内置完整的托管解析器、写出器、规范化输出器和保留
+注释的格式化器。它的设计目标是与 Rust 原生后端产出相同的输出和错误
+信封；一致性由 CI 的规范符合性与跨后端测试套件保证。它绝不加载、
+下载或调用任何原生二进制 —— 适合 AOT 严格、离线隔离或没有
+原生工件的环境。
+
+全局启用：
+
+```csharp
+Ktav.UsePureBackend();   // 进程级默认；UseNativeBackend() 可切回
+var doc = Ktav.Loads("a: 1\n");
+```
+
+……或按调用指定（该参数始终优先于进程级默认值）：
+
+```csharp
+var doc = Ktav.Loads(src, KtavBackend.Pure);
+var outText = Ktav.Dumps(doc, KtavBackend.Pure);
+var canon = Ktav.EmitCanonical(doc, KtavBackend.Pure);
+var formatted = Ktav.Format(src, KtavBackend.Pure);
+var strict = Ktav.LoadsStrict(src, KtavBackend.Pure);
+```
+
+环境变量 `KTAV_BACKEND=pure` 会在启动时设置初始默认值（只读取一次），
+纯后端 CI 任务正是以这种方式在没有原生构建的情况下运行全部测试。
+
+限制与保证：
+
+- 错误信封契约（消息、类别、规范章节、字节区间）的设计目标与原生
+  后端一致；一致性由 CI 的规范符合性与跨后端测试套件保证。区间是
+  UTF-8 的**原始字节**偏移（包含 BOM 与 CRLF 字节，从不做扣减）。
+- 线程安全：`UsePureBackend()` / `UseNativeBackend()` 通过
+  `Interlocked` 原子地交换进程级默认值；每次调用在入口处只读取一次
+  后端选择，因此中途切换默认值不会撕裂调用。按调用传入的参数具有
+  最终决定权 —— 建议在启动时设置一次默认值，或始终显式传参。
+- `NativeVersion()` 仍然指向原生库且需要它；其余所有操作在没有原生
+  工件时均可正常工作。
+
 ## 原生库的解析顺序
 
 在 `net8.0` 上，`NativeLoader` 会注册一个
@@ -237,6 +280,10 @@ x.y\.z: v
 在 `netstandard2.0` 上没有自定义解析器：不会使用 `KTAV_LIB_PATH`
 环境变量，也不会使用缓存/下载回退。请依赖 NuGet 原生资产布局或
 平台常规的原生库搜索路径。
+
+
+以上内容仅适用于**原生**后端。纯托管后端（[纯托管后端](#pure-backend)）
+不会使用 `$KTAV_LIB_PATH`、`runtimes/` 布局、缓存或网络。
 
 ## 运行时支持
 

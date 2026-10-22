@@ -40,6 +40,13 @@ public class TestPaths
         }
         else if (File.Exists(Cabi))
             NativeLoader.SetLibraryPath(Cabi);
+        else if (Environment.GetEnvironmentVariable("KTAV_BACKEND") == "pure")
+        {
+            // Pure-backend CI job: the native build step is deliberately
+            // omitted. Native-only tests carry the "NativeOnly" NUnit
+            // category and are filtered out; everything else must run --
+            // and fail, not skip -- against the pure backend.
+        }
         else
             Assert.Fail($"native library missing: {Cabi}");
     }

@@ -22,6 +22,11 @@ environment variable and the cache/download fallback are not used. Rely
 on NuGet's native asset layout or the platform's normal native-library
 search paths.
 
+
+All of the above applies to the **native** backend only. The pure
+managed backend ([Pure backend](#pure-backend)) never consults
+`$KTAV_LIB_PATH`, the `runtimes/` layout, the cache or the network.
+
 >>>>> lang=ru
 ## Как резолвится нативная библиотека
 
@@ -46,6 +51,11 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 и резервные кэш/загрузка не используются. Используйте компоновку NuGet
 с нативными файлами или стандартные пути поиска библиотек платформы.
 
+
+Всё написанное выше относится только к **нативному** бэкенду. Чистый
+управляемый бэкенд ([Чистый бэкенд](#pure-backend)) не обращается ни к
+`$KTAV_LIB_PATH`, ни к компоновке `runtimes/`, ни к кэшу, ни к сети.
+
 >>>>> lang=zh
 ## 原生库的解析顺序
 
@@ -68,4 +78,8 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 在 `netstandard2.0` 上没有自定义解析器：不会使用 `KTAV_LIB_PATH`
 环境变量，也不会使用缓存/下载回退。请依赖 NuGet 原生资产布局或
 平台常规的原生库搜索路径。
+
+
+以上内容仅适用于**原生**后端。纯托管后端（[纯托管后端](#pure-backend)）
+不会使用 `$KTAV_LIB_PATH`、`runtimes/` 布局、缓存或网络。
 

@@ -342,6 +342,7 @@ public class BasicTests
     }
 
     [Test]
+    [Category("NativeOnly")]
     public void NativeVersionReportsSomething()
     {
         var v = Ktav.NativeVersion();

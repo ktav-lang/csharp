@@ -10,6 +10,7 @@ export default [
   "structured-errors-fields",
   "type-mapping",
   "key-escaping",
+  "pure-backend",
   "native-resolution",
   "runtime-support",
   "license",
