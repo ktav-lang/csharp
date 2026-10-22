@@ -32,6 +32,8 @@ internal static class PureKey
     private static string? ScanEscape(byte[] b, int lo, int hi, int i, out char ch, out int high, out int low, out int len)
     {
         ch = '\0';
+        high = 0;
+        low = 0;
         len = 0;
         if (i + 1 >= hi)
             return "\\<end-of-line>";

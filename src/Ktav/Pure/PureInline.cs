@@ -53,7 +53,7 @@ internal static class PureInline
         private readonly List<int> _stackKind = new();      // opener byte per scope
         private readonly List<byte> _stackSaved = new();    // packed saved flags
         internal readonly List<string> Segments = new();
-        private readonly List<(int o, int c)> _pairs = new();
+        private List<(int o, int c)> _pairs = new();
         private readonly List<(int open, bool pure, int entry)> _openAt = new();
 
         internal Scanner(byte[] b, int lo, int hi, int open, int close, bool bodyObject,
