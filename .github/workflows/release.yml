@@ -101,13 +101,37 @@ jobs:
         with:
           tool: cargo-zigbuild
 
+      - name: Verify published Rust core provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+          cargo update -p ktav --precise 0.8.1
+          python3 - <<'PY'
+          import tomllib
+          with open('Cargo.lock', 'rb') as source:
+              packages = tomllib.load(source)['package']
+          core = [package for package in packages if package['name'] == 'ktav']
+          if len(core) != 1:
+              raise SystemExit('expected exactly one ktav core')
+          expected = {
+              'version': '0.8.1',
+              'source': 'registry+https://github.com/rust-lang/crates.io-index',
+              'checksum': '7140dfe2fa6c320e74768cd6a637828c2d26f81746254f4fcd805f3993bd3fd5',
+          }
+          for field, value in expected.items():
+              if core[0].get(field) != value:
+                  raise SystemExit(f'ktav {field} mismatch: {core[0].get(field)!r}')
+          print('published ktav 0.8.1 core provenance verified')
+          PY
+
       - name: Build (zigbuild)
         if: matrix.settings.use-zigbuild
-        run: cargo zigbuild --release -p ktav-cabi --target ${{ matrix.settings.target }}.2.17
+        run: cargo zigbuild --locked --release -p ktav-cabi --target ${{ matrix.settings.target }}.2.17
 
       - name: Build (native)
         if: ${{ !matrix.settings.use-zigbuild }}
-        run: cargo build --release -p ktav-cabi --target ${{ matrix.settings.target }}
+        run: cargo build --locked --release -p ktav-cabi --target ${{ matrix.settings.target }}
 
       # Stage the built binary under two distinct names so artifact
       # download with merge-multiple does not collide across RIDs.
@@ -169,17 +193,53 @@ jobs:
       - name: Pack
         run: dotnet pack src/Ktav/Ktav.csproj -c Release -o artifacts
 
-      - name: Verify nupkg contains all six runtimes
+      - name: Verify package version and exact runtime payload
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
         run: |
-          set -e
-          nupkg=$(ls artifacts/*.nupkg | head -1)
-          echo "Inspecting: $nupkg"
-          unzip -l "$nupkg" | tee /tmp/nupkg-listing
-          for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
-            grep -q "runtimes/${rid}/native/" /tmp/nupkg-listing \
-              || { echo "missing runtime: ${rid}"; exit 1; }
-          done
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          import zipfile
+          packages = list(Path('artifacts').glob('*.nupkg'))
+          if len(packages) != 1:
+              raise SystemExit('expected exactly one nupkg')
+          expected = {
+              'runtimes/linux-x64/native/libktav_cabi.so',
+              'runtimes/linux-arm64/native/libktav_cabi.so',
+              'runtimes/osx-x64/native/libktav_cabi.dylib',
+              'runtimes/osx-arm64/native/libktav_cabi.dylib',
+              'runtimes/win-x64/native/ktav_cabi.dll',
+              'runtimes/win-arm64/native/ktav_cabi.dll',
+          }
+          with zipfile.ZipFile(packages[0]) as package:
+              names = package.namelist()
+              native = [name for name in names if name.startswith('runtimes/')
+                        and '/native/' in name and not name.endswith('/')]
+              if len(native) != len(expected) or set(native) != expected:
+                  raise SystemExit(f'unexpected native payload: {native!r}')
+              for name in expected | {'lib/net8.0/Ktav.dll', 'lib/netstandard2.0/Ktav.dll'}:
+                  if names.count(name) != 1 or package.getinfo(name).file_size <= 0:
+                      raise SystemExit(f'missing, duplicate or empty payload: {name}')
+              specs = [name for name in names if name.endswith('.nuspec')]
+              if len(specs) != 1:
+                  raise SystemExit('expected exactly one nuspec')
+              root = ET.fromstring(package.read(specs[0]))
+              metadata = [node for node in root if node.tag.rsplit('}', 1)[-1] == 'metadata']
+              if len(metadata) != 1:
+                  raise SystemExit('expected exactly one nuspec metadata element')
+              versions = [node.text for node in metadata[0]
+                          if node.tag.rsplit('}', 1)[-1] == 'version']
+              if versions != ['0.8.1']:
+                  raise SystemExit(f'unexpected package version: {versions!r}')
+              tag = os.environ.get('RELEASE_TAG', '')
+              if tag and tag != 'v' + versions[0]:
+                  raise SystemExit(f'tag {tag!r} does not match package version')
+          print('package version, both managed targets and six native binaries verified')
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
@@ -195,14 +255,27 @@ jobs:
     name: Publish
     runs-on: ubuntu-latest
     needs: [pack]
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    if: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')) && inputs.dry-run != 'true' }}
     environment:
       name: nuget
       url: https://www.nuget.org/packages/Ktav
     permissions:
       contents: write
+      actions: read
       id-token: write
     steps:
+      - name: Require accepted CI and the exact tag target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          target="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')"
+          test "$target" = "$GITHUB_SHA" || { echo 'tag does not match the built commit' >&2; exit 1; }
+          accepted="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI.yml \
+            --commit "$GITHUB_SHA" --status success --limit 20 --json databaseId --jq 'length')"
+          test "$accepted" -gt 0 || { echo 'no successful full CI for this commit' >&2; exit 1; }
+
       - uses: actions/download-artifact@v4
         with:
           pattern: release-asset-*
