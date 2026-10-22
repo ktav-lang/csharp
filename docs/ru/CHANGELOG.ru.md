@@ -11,7 +11,7 @@
 формата Ktav — для последнего см.
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.8.1 — 2026-10-22
 
 ### Добавлено
 

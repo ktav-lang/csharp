@@ -379,7 +379,7 @@ internal static class PureRender
             string line = nl < 0 ? s.Substring(start) : s.Substring(start, nl - start);
             string trimmed = TrimInline(line);
             if (trimmed == ")") soleSingle = true;
-            else if (trimmed == "))")) soleDouble = true;
+            else if (trimmed == "))") soleDouble = true;
             if (line.Length != 0)
             {
                 if (trimmed.Length == 0) wsOnlyLine = true;

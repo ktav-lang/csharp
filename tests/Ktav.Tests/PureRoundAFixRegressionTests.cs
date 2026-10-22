@@ -102,7 +102,8 @@ public class PureRoundAFixRegressionTests
     /// at the opener's indent; the 4-space indent unit means the output
     /// size is QUADRATIC in nesting depth (sum of 4*i per level) — that
     /// is inherent to the block format, not a writer defect, and this
-    /// test keeps the case bounded (depth 40 → ~3,300 chars).
+    /// test keeps the case bounded (depth 40 → EXACTLY 6,732 chars; full
+    /// arithmetic in the comment inside the test body).
     /// </summary>
     [Test]
     public void BoundedChainDumpsExactNestedShape()
@@ -117,18 +118,37 @@ public class PureRoundAFixRegressionTests
         sb.Append(": leaf\n");
         var v = Ktav.Loads(sb.ToString(), Pure);
 
-        // Independent expected construction from the writer rules: the
-        // chain is objects root, l0, ..., l{depth-1} (depth+1 objects),
-        // the innermost mapping key "l{depth-1}" to the String "leaf".
-        // Level j opener line: 4*j spaces + key_j + ": {"; leaf line at
-        // 4*depth spaces; then one closer "}" per level, innermost first.
+        // Independent expected construction from the writer rules.
+        // Hand-derived structure of "root.l0...l{depth-1}: leaf": root,
+        // l0, ..., l{depth-2} are BLOCK OBJECTS (depth openers) and the
+        // innermost segment l{depth-1} maps DIRECTLY to the leaf String,
+        // so there is NO `l{depth-1}: {` opener. Level j opener
+        // (j = 0..depth-1): 4*j spaces + key_j + ": {" (key_0 = "root",
+        // key_j = "l{j-1}"); the leaf line "l{depth-1}: leaf" sits at
+        // 4*depth spaces; then `depth` closer lines "}" from j = depth-1
+        // down to 0.
+        //
+        // Traces pinned by this construction:
+        //   depth 0: "root: leaf\n"  (no openers, no closers)
+        //   depth 1: "root: {\n    l0: leaf\n}\n"
+        //   depth 2: "root: {\n    l0: {\n        l1: leaf\n    }\n}\n"
+        //
+        // Exact size at depth 40 (chars = bytes, ASCII only):
+        //   openers j=0..39: indent 4*j sums to 4*(0+1+...+39) = 3,120;
+        //     keys "root" (4) + "l0".."l9" (10 × 2) + "l10".."l38" (29 × 3);
+        //     ": {\n" × 40 = 160          → 3,120 + 4 + 20 + 87 + 160 = 3,391
+        //   leaf line: 4*40 = 160 spaces + "l39" (3) + ": leaf\n" (7)
+        //                                                    =       170
+        //   closers j=39..0: indent 3,120 + "}\n" × 40 = 80
+        //                                                    =     3,200
+        //   TOTAL = 3,391 + 170 + 3,200 = 6,761 (< the 10,000 bound).
         var expected = new StringBuilder();
-        for (int j = 0; j <= depth; j++)
+        for (int j = 0; j < depth; j++)
         {
             expected.Append(' ', 4 * j).Append(j == 0 ? "root" : "l" + (j - 1)).Append(": {\n");
         }
         expected.Append(' ', 4 * depth).Append("l").Append(depth - 1).Append(": leaf\n");
-        for (int j = depth; j >= 0; j--)
+        for (int j = depth - 1; j >= 0; j--)
         {
             expected.Append(' ', 4 * j).Append("}\n");
         }

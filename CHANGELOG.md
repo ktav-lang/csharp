@@ -11,7 +11,7 @@ This changelog tracks **binding releases**, not changes to the Ktav
 format itself — see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.8.1 — 2026-10-22
 
 ### Added
 

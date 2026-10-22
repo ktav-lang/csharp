@@ -229,51 +229,25 @@ starting with `##`.
 
 A literal backslash in a key is `\\`.
 
-## The pure backend (no native binary)
+## The pure backend
 
-Since 0.8.1 the library ships a complete managed parser, writer,
-canonical emitter and comment-preserving formatter. It is designed to
-produce the same output and error envelopes as the Rust-backed native
-backend; parity is enforced by the CI conformance and cross-backend
-suites. It never loads, downloads or shells out to a native
-binary — useful for AOT-strict, air-gapped or no-native-artifact
-environments.
+Since 0.8.1 the library ships a complete managed parser, writer, canonical emitter and comment-preserving formatter. It is intended to match native output and error envelopes; CI conformance checks parity. Pure does not load, download, or invoke native code.
 
-Choose it globally:
+Select globally with `Ktav.UsePureBackend()` or pass `KtavBackend.Pure` per call (which takes precedence).
 
 ```csharp
-Ktav.UsePureBackend();   // process-wide default; UseNativeBackend() reverts
-var doc = Ktav.Loads("a: 1\n");
-```
-
-…or per call (this parameter always wins over the process default):
-
-```csharp
-var doc = Ktav.Loads(src, KtavBackend.Pure);
-var outText = Ktav.Dumps(doc, KtavBackend.Pure);
-var canon = Ktav.EmitCanonical(doc, KtavBackend.Pure);
+var value = Ktav.Loads(src, KtavBackend.Pure);
+var text = Ktav.Dumps(value, KtavBackend.Pure);
+var canonical = Ktav.EmitCanonical(value, KtavBackend.Pure);
 var formatted = Ktav.Format(src, KtavBackend.Pure);
 var strict = Ktav.LoadsStrict(src, KtavBackend.Pure);
 ```
 
-The `KTAV_BACKEND=pure` environment variable sets the initial default
-(handled once at startup), which is how the pure CI job runs the whole
-test suite without a native build.
+`KTAV_BACKEND=pure` sets the initial default once at startup. Per-call selection takes precedence. Default changes are atomic. `NativeVersion()` still requires native. CI checks pure error parity; spans use original UTF-8 byte offsets, including BOM and line endings.
 
-Limits and guarantees:
+Run Pure with the ready `net8.0` `Ktav.dll` and a compatible installed .NET 8 `Microsoft.NETCore.App` framework. A later major version alone does not guarantee a net8 consumer will run; that requires host-configured supported roll-forward. Framework APIs such as System.Text.Json and Memory are available on net8, but pure execution does not use native JSON wire/envelope helpers. For standalone use, copy the DLL and reference it via assembly `Reference`/`HintPath`, without a Ktav `PackageReference`. Pure does not load, download, invoke, or fall back to native, and needs no network.
 
-- The error envelope contract (messages, categories, spec sections, byte
-  spans) is designed to match the native backend; parity is enforced by
-  the CI conformance and cross-backend suites. Spans are UTF-8
-  **original-byte** offsets (BOM
-  and CRLF bytes included, never subtracted).
-- Thread-safety: `UsePureBackend()` / `UseNativeBackend()` swap the
-  process-wide default atomically (`Interlocked`); each call copies the
-  backend choice once at entry, so a mid-flight flip cannot tear a call.
-  The per-call parameter is authoritative — prefer setting the default
-  once at startup, or always passing it explicitly.
-- `NativeVersion()` still refers to the native library and requires it;
-  everything else works without any native artifact.
+The multi-target NuGet package is not dependency-free: `netstandard2.0` retains `System.Memory` and `System.Text.Json` PackageReferences for compatibility and native wire/error-envelope support. Native netstandard support remains. SDK, NuGet restore/build, tests, and documentation tools are development tooling, not Pure runtime dependencies.
 
 ## How the native library is resolved
 

@@ -174,8 +174,15 @@ internal static class PureParser
                             _rootIsExplicitCompound = true;
                             PushArr(tStart);
                             return;
-                        case 4: PushObj(0); return; // implicit object
-                        case 5: PushArr(0); return; // implicit array
+                        case 4: // implicit object root — the line ITSELF is the
+                                // first pair (§5.0.1 rule 7): push the root and
+                                // FALL THROUGH to the normal pair dispatch below
+                                // (a `return` here would swallow the first line).
+                            PushObj(0);
+                            break;
+                        case 5: // implicit array root — same fall-through (§5 rule 8).
+                            PushArr(0);
+                            break;
                     }
                 }
             }
@@ -532,21 +539,37 @@ internal static class PureParser
                 var (lo, hi) = PureUtf8.Trim(src, lines[0].s, lines[0].e);
                 return lo >= hi ? "" : Encoding.UTF8.GetString(src, lo, hi - lo);
             }
-            // Dedent: common leading-whitespace (code points) over non-blank lines.
-            int common = 0;
-            bool first = true;
+            // Dedent: longest common leading-whitespace prefix over non-blank
+            // lines, compared CODE POINT by code point (each member must be the
+            // same code point across lines). A minimum byte-RUN length would
+            // wrongly strip equal-length runs of different whitespace
+            // characters (e.g. three ASCII spaces vs one U+3000), so the runs
+            // are walked in parallel and cut at the first code-point mismatch.
+            int common = -1; // common prefix length in code points
+            int refLo = -1, refEnd = 0; // first non-blank line's leading-ws run
             foreach (var (ls, le) in lines)
             {
                 var (tlo, thi) = PureUtf8.Trim(src, ls, le);
-                if (tlo >= thi) continue; // blank
-                int run = PureUtf8.LeadingWsRun(src, ls, le);
-                if (first) { common = run; first = false; }
-                else common = Math.Min(common, run);
+                if (tlo >= thi) continue; // blank lines don't constrain
+                int runEnd = ls + PureUtf8.LeadingWsRun(src, ls, le);
+                if (common < 0)
+                {
+                    refLo = ls; refEnd = runEnd;
+                    common = CountCps(src, ls, runEnd);
+                    continue;
+                }
+                int matched = 0, pRef = refLo, pCur = ls;
+                while (matched < common && pRef < refEnd && pCur < runEnd
+                    && CpAt(src, pRef) == CpAt(src, pCur))
+                {
+                    matched++;
+                    pRef += PureUtf8.InlineWsLenAt(src, pRef, refEnd);
+                    pCur += PureUtf8.InlineWsLenAt(src, pCur, runEnd);
+                }
+                common = matched;
                 if (common == 0) break;
             }
-            // Cap at each non-blank line's own run (the shared-prefix scan in
-            // Rust compares code points; the byte min is equivalent here
-            // because every run is a whitespace code-point sequence).
+            if (common < 0) common = 0; // all lines blank
             var sb2 = new StringBuilder();
             for (int i = 0; i < lines.Count; i++)
             {
@@ -554,8 +577,10 @@ internal static class PureParser
                 var (ls, le) = lines[i];
                 var (tlo, thi) = PureUtf8.Trim(src, ls, le);
                 if (tlo >= thi) continue; // blank line → empty
-                int cut = Math.Min(common, PureUtf8.LeadingWsRun(src, ls, le));
-                int cLo = ls + cut;
+                // Advance `common` whitespace CODE POINTS (each <= 3 bytes).
+                int cLo = ls;
+                for (int k = 0; k < common; k++)
+                    cLo += PureUtf8.InlineWsLenAt(src, cLo, le);
                 int cHi = le;
                 while (cHi > cLo)
                 {
@@ -590,6 +615,29 @@ internal static class PureParser
             VInlineValue = r.InlineValue;
             return r.Kind;
         }
+    }
+
+    /// <summary>Code point count of [lo,hi) — used for whitespace-only
+    /// ranges in the multiline dedent. Internal so PureFmtTree shares it
+    /// (same sharing pattern as CpAt).</summary>
+    internal static int CountCps(byte[] b, int lo, int hi)
+    {
+        int n = 0;
+        while (lo < hi) { lo += PureUtf8.InlineWsLenAt(b, lo, hi); n++; }
+        return n;
+    }
+
+    /// <summary>Code point starting at b[lo] (input is UTF-8 validated).
+    /// Internal so PureFmtTree shares it in the common-prefix multiline
+    /// dedent (identical algorithm in both FinishMultiline copies).</summary>
+    internal static int CpAt(byte[] b, int lo)
+    {
+        int x = b[lo];
+        if (x < 0x80) return x;
+        if (x < 0xE0) return ((x & 0x1F) << 6) | (b[lo + 1] & 0x3F);
+        if (x < 0xF0) return ((x & 0x0F) << 12) | ((b[lo + 1] & 0x3F) << 6) | (b[lo + 2] & 0x3F);
+        return ((x & 0x07) << 18) | ((b[lo + 1] & 0x3F) << 12)
+            | ((b[lo + 2] & 0x3F) << 6) | (b[lo + 3] & 0x3F);
     }
 
     /// <summary>Trailing full-class whitespace length ending at kHi.</summary>

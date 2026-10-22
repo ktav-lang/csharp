@@ -318,18 +318,38 @@ internal static class PureFmtTree
             var (lo, hi) = PureUtf8.Trim(src, lines[0].s, lines[0].e);
             return lo >= hi ? "" : Encoding.UTF8.GetString(src, lo, hi - lo);
         }
-        // Dedent: common leading-whitespace (code points) over non-blank lines.
-        int common = 0;
-        bool first = true;
+        // Dedent: longest common leading-whitespace prefix over non-blank
+        // lines, compared CODE POINT by code point (each member must be the
+        // same code point across lines). A minimum byte-RUN length would
+        // wrongly strip equal-length runs of different whitespace
+        // characters (e.g. three ASCII spaces vs one U+3000), so the runs
+        // are walked in parallel and cut at the first code-point mismatch.
+        // Mirrors PureParser.FinishMultiline exactly (CpAt is shared).
+        int common = -1; // common prefix length in code points
+        int refLo = -1, refEnd = 0; // first non-blank line's leading-ws run
         foreach (var (ls, le) in lines)
         {
             var (tlo, thi) = PureUtf8.Trim(src, ls, le);
-            if (tlo >= thi) continue;
-            int run = PureUtf8.LeadingWsRun(src, ls, le);
-            if (first) { common = run; first = false; }
-            else common = Math.Min(common, run);
+            if (tlo >= thi) continue; // blank lines don't constrain
+            int runEnd = ls + PureUtf8.LeadingWsRun(src, ls, le);
+            if (common < 0)
+            {
+                refLo = ls; refEnd = runEnd;
+                common = PureParser.CountCps(src, ls, runEnd);
+                continue;
+            }
+            int matched = 0, pRef = refLo, pCur = ls;
+            while (matched < common && pRef < refEnd && pCur < runEnd
+                && PureParser.CpAt(src, pRef) == PureParser.CpAt(src, pCur))
+            {
+                matched++;
+                pRef += PureUtf8.InlineWsLenAt(src, pRef, refEnd);
+                pCur += PureUtf8.InlineWsLenAt(src, pCur, runEnd);
+            }
+            common = matched;
             if (common == 0) break;
         }
+        if (common < 0) common = 0; // all lines blank
         var sb2 = new StringBuilder();
         for (int i = 0; i < lines.Count; i++)
         {
@@ -337,8 +357,10 @@ internal static class PureFmtTree
             var (ls, le) = lines[i];
             var (tlo, thi) = PureUtf8.Trim(src, ls, le);
             if (tlo >= thi) continue; // blank line → empty
-            int cut = Math.Min(common, PureUtf8.LeadingWsRun(src, ls, le));
-            int cLo = ls + cut;
+            // Advance `common` whitespace CODE POINTS (each <= 3 bytes).
+            int cLo = ls;
+            for (int k = 0; k < common; k++)
+                cLo += PureUtf8.InlineWsLenAt(src, cLo, le);
             int cHi = le;
             while (cHi > cLo)
             {

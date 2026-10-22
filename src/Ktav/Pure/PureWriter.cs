@@ -280,6 +280,36 @@ internal static class PureWriter
         }
     }
 
+    /// <summary>
+    /// Explicit walker task (render.rs Task enum), private nested inside
+    /// Walker like PureCanonical/PureFormatter. All members are assigned in
+    /// every constructor; unused members keep their zero values.
+    /// </summary>
+    private readonly struct Task
+    {
+        public const int KPathPush = 0, KPathPop = 1, KClose = 2, KPairs = 3, KItems = 4;
+
+        public readonly int Code;
+        public readonly int Index, Indent;
+        public readonly bool IsRoot, RootFirst;
+        public readonly char Closer;
+        public readonly string? Key;
+        public readonly KtavObject? Obj;
+        public readonly KtavArray? Arr;
+
+        public Task(int code, string key)
+        { Code = code; Key = key; Index = 0; Indent = 0; IsRoot = false; RootFirst = false; Closer = '\0'; }
+
+        public Task(int code, int indent, char closer)
+        { Code = code; Indent = indent; Closer = closer; Index = 0; IsRoot = false; RootFirst = false; Key = null; }
+
+        public Task(int code, KtavObject obj, int index, int indent, bool isRoot)
+        { Code = code; Obj = obj; Index = index; Indent = indent; IsRoot = isRoot; RootFirst = false; Closer = '\0'; Key = null; }
+
+        public Task(int code, KtavArray arr, int index, int indent, bool rootFirst)
+        { Code = code; Arr = arr; Index = index; Indent = indent; RootFirst = rootFirst; IsRoot = false; Closer = '\0'; Key = null; }
+    }
+
     /// <summary>render.rs forced_string_text: null for compounds.</summary>
     private static string? ForcedStringText(KtavValue v) => v switch
     {

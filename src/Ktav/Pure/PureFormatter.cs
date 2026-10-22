@@ -246,8 +246,18 @@ internal static class PureFormatter
                             _rootIsExplicitCompound = true;
                             PushArr(tStart);
                             return;
-                        case 4: PushObj(0); return; // implicit object root
-                        case 5: PushArr(0); return; // implicit array root
+                        case 4: // implicit object root — the line ITSELF is the
+                                // first pair (§5.0.1 rule 7): push the root and
+                                // FALL THROUGH to the dispatch below, where the
+                                // pending trivia is captured exactly once and
+                                // attached to that first pair (a `return` here
+                                // would swallow the first line and its trivia).
+                            PushObj(0);
+                            break;
+                        case 5: // implicit array root — same fall-through (§5 rule 8);
+                                // trivia attaches to the first item.
+                            PushArr(0);
+                            break;
                     }
                 }
             }

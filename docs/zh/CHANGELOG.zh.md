@@ -10,7 +10,7 @@ MINOR 递增视为破坏性变更。
 本 changelog 跟踪 **绑定发布**,不覆盖 Ktav 格式自身的变更 ——
 后者见 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md)。
 
-## Unreleased
+## 0.8.1 — 2026-10-22
 
 ### 新增
 

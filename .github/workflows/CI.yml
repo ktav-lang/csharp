@@ -103,6 +103,45 @@ jobs:
       - name: dotnet test (pure backend, no native build)
         run: dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release --filter "Category!=NativeOnly" --logger "console;verbosity=normal"
 
+  # Empty-ABI marshaling regression: a DEBUG ktav-cabi has Rust's
+  # non-null/aligned slice assertions active (slice::from_raw_parts at
+  # declare.rs:76/:110 asserts on a null pointer even at len 0), which is
+  # exactly what makes a zero-length input observable. Only the new
+  # NativeEmptyAbiTests fixture runs, pointed at the REAL debug artifact
+  # via KTAV_LIB_PATH — TestPaths honours that override first and asserts
+  # File.Exists on it, so a missing debug build fails the job instead of
+  # silently falling back to a release binary or a download.
+  test-native-debug:
+    name: native debug cabi / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      KTAV_LIB_PATH: ${{ github.workspace }}/target/debug/${{ matrix.os == 'windows-latest' && 'ktav_cabi.dll' || 'libktav_cabi.so' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Same committed-lockfile pin as the release/test jobs.
+      - name: Pin ktav dependency to 0.8.1
+        run: cargo update -p ktav --precise 0.8.1
+
+      # DEBUG build (deliberately WITHOUT --release): debug assertions
+      # make the null-slice defect abort instead of passing silently.
+      - name: Build debug native library
+        run: cargo build -p ktav-cabi
+
+      - name: dotnet test (empty-ABI regression vs debug cabi)
+        run: dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release --filter "FullyQualifiedName~NativeEmptyAbiTests" --logger "console;verbosity=normal"
+
   lint-rust:
     name: rust clippy + fmt
     runs-on: ubuntu-latest
@@ -114,6 +153,54 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --release -p ktav-cabi -- -D warnings
+
+  standalone-pure-consumer:
+    name: standalone net8 assembly / pure only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Pack Ktav nupkg
+        run: dotnet pack src/Ktav/Ktav.csproj -c Release -o "$RUNNER_TEMP/ktav-pkg"
+      - name: Checker negative controls (in-memory fixtures)
+        run: python3 scripts/tests/standalone_pkg_check_fixtures.py
+      - name: Verify nuspec net8 dependencies and extract packaged Ktav.dll
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/ktav-standalone"
+          mkdir -p "$root/consumer"
+          shopt -s nullglob
+          arr=("$RUNNER_TEMP"/ktav-pkg/Ktav.*.nupkg)
+          test "${#arr[@]}" -eq 1 || { echo "expected exactly one Ktav.*.nupkg, got ${#arr[@]}" >&2; exit 1; }
+          test -f "${arr[0]}"
+          python3 scripts/standalone_pkg_check.py "${arr[0]}" "$root/consumer"
+          cp tests/StandaloneConsumer/Program.cs tests/StandaloneConsumer/StandaloneConsumer.csproj "$root/consumer/"
+          test "$(find "$root/consumer" -maxdepth 1 -type f | wc -l)" -eq 3
+          if find "$root/consumer" -type f \
+            \( -iname 'System.Text.Json.dll' -o -iname 'System.Memory.dll' -o -iname 'System.Buffers.dll' \
+            -o -iname 'System.Runtime.CompilerServices.Unsafe.dll' -o -iname 'ktav_cabi*' -o -iname 'libktav_cabi*' \) | grep -q .; then
+            echo "Unexpected third-party/native runtime file in isolated consumer" >&2
+            exit 1
+          fi
+      - name: Build consumer against copied assembly only
+        run: dotnet build "$RUNNER_TEMP/ktav-standalone/consumer/StandaloneConsumer.csproj" -c Release -p:KtavAssemblyPath="$RUNNER_TEMP/ktav-standalone/consumer/Ktav.dll"
+      - name: Run framework-dependent standalone consumer with native resolver pinned absent
+        env:
+          KTAV_BACKEND: pure
+          KTAV_LIB_PATH: ${{ runner.temp }}/ktav-standalone/no-such-native-library
+        run: |
+          set -euo pipefail
+          test ! -e "$KTAV_LIB_PATH"
+          app="$RUNNER_TEMP/ktav-standalone/consumer/bin/Release/net8.0/StandaloneConsumer.dll"
+          dotnet "$app" | tee "$RUNNER_TEMP/ktav-standalone/consumer.log"
+          grep -q KTAV_STANDALONE_PURE_OK "$RUNNER_TEMP/ktav-standalone/consumer.log"
+          if find "$RUNNER_TEMP/ktav-standalone/consumer/bin/Release/net8.0" -type f \
+            \( -iname '*.dll' ! -iname 'Ktav.dll' ! -iname 'StandaloneConsumer.dll' -o -iname 'ktav_cabi*' -o -iname 'libktav_cabi*' \) | grep -q .; then
+            echo "Unexpected third-party/native runtime file after consumer build" >&2
+            exit 1
+          fi
 
   build-pack:
     name: dotnet pack (no native)
@@ -194,8 +281,11 @@ jobs:
           //   args[0] == "default-native": startup default must be
           //     Native (enum check only, no native load); all operations
           //     use explicit per-call KtavBackend.Pure.
-          //   args[0] == "default-pure": default must be Pure; all
-          //     operations use the default-argument overloads.
+          //   args[0] == "default-pure": KTAV_BACKEND=pure makes the
+          //     startup default Pure; all operations go through the
+          //     DEFAULT-ARGUMENT overloads, so the env → default → Pure
+          //     routing is genuinely exercised (a routing regression
+          //     fails the marker).
           if (args.Length != 1 || (args[0] != "default-native" && args[0] != "default-pure"))
           {
               Console.Error.WriteLine("usage: dotnet run -- default-native|default-pure");
@@ -207,6 +297,12 @@ jobs:
           KtavBackend runDefault = nativeDefault ? KtavBackend.Native
                                                  : KtavBackend.Pure;
           const string lossy = "version: 1.10\n";
+          const string srcDoc = "a.b: [1, 2]\nc: :: raw\nbig: 99999999999999999999999999999\n";
+
+          // default-native: every call pins KtavBackend.Pure explicitly.
+          // default-pure: every call uses the default-argument overload —
+          // KTAV_BACKEND=pure must route it to Pure or nothing works.
+          bool explicitPure = args[0] == "default-native";
 
           try
           {
@@ -221,9 +317,9 @@ jobs:
               // Full pure-surface exercise through the PUBLIC API. Dotted
               // key "a.b" nests a→b (TryGet is a literal single-level
               // lookup), so traverse both levels explicitly.
-              var v = (KtavObject)global::Ktav.Ktav.Loads(
-                  "a.b: [1, 2]\nc: :: raw\nbig: 99999999999999999999999999999\n",
-                  KtavBackend.Pure);
+              var v = (KtavObject)(explicitPure
+                  ? global::Ktav.Ktav.Loads(srcDoc, KtavBackend.Pure)
+                  : global::Ktav.Ktav.Loads(srcDoc));
               var a = (KtavObject)v.TryGet("a")!;
               if (((KtavArray)a.TryGet("b")!).Items.Count != 2)
                   throw new InvalidOperationException("Loads");
@@ -232,7 +328,8 @@ jobs:
 
               try
               {
-                  global::Ktav.Ktav.LoadsStrict(lossy, KtavBackend.Pure);
+                  if (explicitPure) global::Ktav.Ktav.LoadsStrict(lossy, KtavBackend.Pure);
+                  else global::Ktav.Ktav.LoadsStrict(lossy);
                   throw new InvalidOperationException("strict must fail");
               }
               catch (KtavException e)
@@ -241,15 +338,20 @@ jobs:
                       $"expected LossyScalar, got {e.Error}");
               }
 
-              if (global::Ktav.Ktav.Dumps(v, KtavBackend.Pure).Length == 0)
+              if ((explicitPure ? global::Ktav.Ktav.Dumps(v, KtavBackend.Pure)
+                                : global::Ktav.Ktav.Dumps(v)).Length == 0)
                   throw new InvalidOperationException("Dumps");
-              if (global::Ktav.Ktav.DumpsForceStrings(v, KtavBackend.Pure).Length == 0)
+              if ((explicitPure ? global::Ktav.Ktav.DumpsForceStrings(v, KtavBackend.Pure)
+                                : global::Ktav.Ktav.DumpsForceStrings(v)).Length == 0)
                   throw new InvalidOperationException("DumpsForceStrings");
-              if (global::Ktav.Ktav.EmitCanonical(v, KtavBackend.Pure).Length == 0)
+              if ((explicitPure ? global::Ktav.Ktav.EmitCanonical(v, KtavBackend.Pure)
+                                : global::Ktav.Ktav.EmitCanonical(v)).Length == 0)
                   throw new InvalidOperationException("EmitCanonical");
-              if (global::Ktav.Ktav.Format("## c\na:   1\n", KtavBackend.Pure).Length == 0)
+              if ((explicitPure ? global::Ktav.Ktav.Format("## c\na:   1\n", KtavBackend.Pure)
+                                : global::Ktav.Ktav.Format("## c\na:   1\n")).Length == 0)
                   throw new InvalidOperationException("Format");
-              if (global::Ktav.Ktav.CanonicalFromSource("a: 1\n", KtavBackend.Pure) == null)
+              if ((explicitPure ? global::Ktav.Ktav.CanonicalFromSource("a: 1\n", KtavBackend.Pure)
+                                : global::Ktav.Ktav.CanonicalFromSource("a: 1\n")) == null)
                   throw new InvalidOperationException("CanonicalFromSource");
           }
           catch (Exception e)

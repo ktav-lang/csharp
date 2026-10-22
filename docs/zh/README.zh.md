@@ -219,45 +219,25 @@ x.y\.z: v
 
 键中的字面量反斜杠写作 `\\`。
 
-## 纯托管后端（无需原生二进制）
+## 纯托管后端
 
-从 0.8.1 起，本库内置完整的托管解析器、写出器、规范化输出器和保留
-注释的格式化器。它的设计目标是与 Rust 原生后端产出相同的输出和错误
-信封；一致性由 CI 的规范符合性与跨后端测试套件保证。它绝不加载、
-下载或调用任何原生二进制 —— 适合 AOT 严格、离线隔离或没有
-原生工件的环境。
+从 0.8.1 起，本库提供托管 parser、writer、canonical emitter 和保留注释的 formatter。目标是匹配 native 输出和错误信封；CI 检查一致性。Pure 不加载、下载或调用 native 代码。
 
-全局启用：
+可通过 `Ktav.UsePureBackend()` 全局选择，或按调用传入 `KtavBackend.Pure`（其优先级更高）。
 
 ```csharp
-Ktav.UsePureBackend();   // 进程级默认；UseNativeBackend() 可切回
-var doc = Ktav.Loads("a: 1\n");
-```
-
-……或按调用指定（该参数始终优先于进程级默认值）：
-
-```csharp
-var doc = Ktav.Loads(src, KtavBackend.Pure);
-var outText = Ktav.Dumps(doc, KtavBackend.Pure);
-var canon = Ktav.EmitCanonical(doc, KtavBackend.Pure);
+var value = Ktav.Loads(src, KtavBackend.Pure);
+var text = Ktav.Dumps(value, KtavBackend.Pure);
+var canonical = Ktav.EmitCanonical(value, KtavBackend.Pure);
 var formatted = Ktav.Format(src, KtavBackend.Pure);
 var strict = Ktav.LoadsStrict(src, KtavBackend.Pure);
 ```
 
-环境变量 `KTAV_BACKEND=pure` 会在启动时设置初始默认值（只读取一次），
-纯后端 CI 任务正是以这种方式在没有原生构建的情况下运行全部测试。
+`KTAV_BACKEND=pure` 在启动时设置一次默认值；按次选择优先。默认值原子切换。`NativeVersion()` 仍需要 native 库。CI 检查 Pure 错误一致性；spans 使用原始 UTF-8 字节偏移，包含 BOM 和换行字节。
 
-限制与保证：
+Pure 需要现成的 `net8.0` `Ktav.dll` 和已安装兼容的 .NET 8 `Microsoft.NETCore.App` framework。仅安装更高 major 版本本身不保证 net8 consumer 可运行；这需要 host 配置受支持的 roll-forward。System.Text.Json、Memory 等 framework API 在 net8 可用，但 pure execution 不使用 native JSON wire/envelope helpers。独立使用时复制 DLL 并通过 assembly `Reference`/`HintPath` 引用，不添加 Ktav `PackageReference`。Pure 不加载、下载、调用或 fallback 到 native，也不需要网络。
 
-- 错误信封契约（消息、类别、规范章节、字节区间）的设计目标与原生
-  后端一致；一致性由 CI 的规范符合性与跨后端测试套件保证。区间是
-  UTF-8 的**原始字节**偏移（包含 BOM 与 CRLF 字节，从不做扣减）。
-- 线程安全：`UsePureBackend()` / `UseNativeBackend()` 通过
-  `Interlocked` 原子地交换进程级默认值；每次调用在入口处只读取一次
-  后端选择，因此中途切换默认值不会撕裂调用。按调用传入的参数具有
-  最终决定权 —— 建议在启动时设置一次默认值，或始终显式传参。
-- `NativeVersion()` 仍然指向原生库且需要它；其余所有操作在没有原生
-  工件时均可正常工作。
+多目标 NuGet 包并非无依赖：为兼容性及 native wire/error-envelope，`netstandard2.0` 保留 `System.Memory` 和 `System.Text.Json` PackageReference。保留 native netstandard 支持。SDK、NuGet restore/build、测试及文档工具属于开发工具，不是 Pure runtime 依赖。
 
 ## 原生库的解析顺序
 

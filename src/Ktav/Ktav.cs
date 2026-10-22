@@ -81,8 +81,7 @@ public static class Ktav
     internal static KtavValue LoadsUtf8(byte[] source, KtavBackend backend)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
-        ValidateUtf8OrThrow(source);
-        if (IsPure(backend)) return Pure.PureParser.ParseValidated(source, strict: false);
+        if (IsPure(backend)) return Pure.PureParser.ParseLax(source);
         NativeLoader.EnsureRegistered();
         var output = CallNative(NativeOp.Loads, source);
         return WireJson.Decode(output);
@@ -358,11 +357,12 @@ public static class Ktav
         IntPtr inputPtr = IntPtr.Zero;
         try
         {
+            // Rust slices need a non-null aligned pointer even at len 0
+            // (declare.rs builds slice::from_raw_parts(src, src_len));
+            // we hand a live 1-byte buffer and pass the original length 0.
+            inputPtr = Marshal.AllocHGlobal(Math.Max(input.Length, 1));
             if (input.Length > 0)
-            {
-                inputPtr = Marshal.AllocHGlobal(input.Length);
                 Marshal.Copy(input, 0, inputPtr, input.Length);
-            }
 
 #if NET8_0_OR_GREATER
             int rc;

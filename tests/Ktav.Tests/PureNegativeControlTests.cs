@@ -267,6 +267,153 @@ public class PureNegativeControlTests
         Assert.That(v.TryGet("b"), Is.EqualTo(new KtavFloat("10000000000.0")));
     }
 
+    // -------- implicit-root FIRST content line (§5.0.1 rules 7/8) --------
+    //
+    // The first content line of an implicit-root document IS the first
+    // pair/array item — it must be consumed exactly once by the normal
+    // dispatch, never swallowed by root classification. Each check asserts
+    // the EXACT structure and EXACTLY one entry/item, so a dropped first
+    // line (empty object/array) fails.
+
+    private static void AssertExactlyOneEntry(KtavValue v, string key, KtavValue expected,
+        string because)
+    {
+        var o = (KtavObject)v;
+        Assert.That(o.Entries, Has.Count.EqualTo(1), because);
+        Assert.That(o.Entries[0].Key, Is.EqualTo(key), because);
+        Assert.That(o.Entries[0].Value, Is.EqualTo(expected), because);
+    }
+
+    private static void AssertExactlyOneItem(KtavValue v, KtavValue expected, string because)
+    {
+        var items = ((KtavArray)v).Items;
+        Assert.That(items, Has.Count.EqualTo(1), because);
+        Assert.That(items[0], Is.EqualTo(expected), because);
+    }
+
+    [Test]
+    public void ImplicitRootFirstLineBecomesTheFirstPairOrItem()
+    {
+        // a: 1 → {a: 1} (implicit object; NOT an empty object)
+        AssertExactlyOneEntry(Ktav.Loads("a: 1\n", Pure), "a", KtavInteger.Of(1),
+            "implicit object root keeps its first pair");
+
+        // foo → ["foo"] (implicit array; NOT an empty array)
+        AssertExactlyOneItem(Ktav.Loads("foo\n", Pure), new KtavString("foo"),
+            "implicit array root keeps its first item");
+
+        // a.b: leaf → nested a→b→"leaf"
+        var nested = (KtavObject)Ktav.Loads("a.b: leaf\n", Pure);
+        Assert.That(nested.Entries, Has.Count.EqualTo(1));
+        var inner = (KtavObject)nested.Entries[0].Value;
+        Assert.That(nested.Entries[0].Key, Is.EqualTo("a"));
+        Assert.That(inner.Entries, Has.Count.EqualTo(1));
+        Assert.That(inner.Entries[0].Key, Is.EqualTo("b"));
+        Assert.That(inner.Entries[0].Value, Is.EqualTo(new KtavString("leaf")));
+    }
+
+    [TestCase("a: 1\n", "a", "1")]
+    [TestCase("foo\n", null, "foo")]
+    [TestCase("a.b: leaf\n", "a", "leaf")]
+    public void ImplicitRootSurvivesBomCommentAndMissingFinalNewline(
+        string src, string? key, string body)
+    {
+        bool isArray = key == null;
+        var utf8 = Encoding.UTF8.GetBytes(src);
+
+        // (a) UTF-8 BOM prefix via LoadsUtf8.
+        var bom = Concat(new byte[] { 0xEF, 0xBB, 0xBF }, utf8);
+        AssertFirstLineIntact(Ktav.LoadsUtf8(bom, Pure), isArray, key, body, "BOM: " + src);
+
+        // (b) a ## comment line before.
+        AssertFirstLineIntact(Ktav.Loads("## c\n" + src, Pure), isArray, key, body,
+            "comment: " + src);
+
+        // (c) no trailing newline (LoadsUtf8 of bytes without the final LF).
+        var noNl = Encoding.UTF8.GetBytes(src.TrimEnd('\n'));
+        AssertFirstLineIntact(Ktav.LoadsUtf8(noNl, Pure), isArray, key, body,
+            "no trailing newline: " + src);
+    }
+
+    private static void AssertFirstLineIntact(KtavValue v, bool isArray,
+        string? key, string body, string because)
+    {
+        if (isArray)
+        {
+            var items = ((KtavArray)v).Items;
+            Assert.That(items, Has.Count.EqualTo(1), because);
+            Assert.That(items[0], Is.EqualTo(new KtavString(body)), because);
+        }
+        else if (body == "1")
+        {
+            AssertExactlyOneEntry(v, key!, KtavInteger.Of(1), because);
+        }
+        else
+        {
+            // dotted a.b: leaf — one entry whose value is a one-pair object
+            var o = (KtavObject)v;
+            Assert.That(o.Entries, Has.Count.EqualTo(1), because);
+            Assert.That(o.Entries[0].Key, Is.EqualTo(key), because);
+            var inner = (KtavObject)o.Entries[0].Value;
+            Assert.That(inner.Entries, Has.Count.EqualTo(1), because);
+            Assert.That(inner.Entries[0].Key, Is.EqualTo("b"), because);
+            Assert.That(inner.Entries[0].Value, Is.EqualTo(new KtavString(body)), because);
+        }
+    }
+
+    // -------- multiline dedent (§5.6 collecting.rs) --------
+    //
+    // The stripped form removes the longest COMMON leading-whitespace
+    // prefix over non-blank lines, compared CODE POINT by code point —
+    // NOT the minimum byte length of the leading runs. Every expectation
+    // below is the exact resulting string (byte-compared), so both
+    // under- and over-stripping fail.
+
+    [Test]
+    public void MultilineDedentCommonPrefixOnly()
+    {
+        // Both lines share the two-space prefix → stripped.
+        AssertDedent("k: (\n  a\n  b\n)\n", "a\nb");
+    }
+
+    [Test]
+    public void MultilineDedentEqualByteLengthsDifferentCodePointsStripsNothing()
+    {
+        // "   x" (3 ASCII spaces, 3 bytes) vs one U+3000 (3 bytes): equal
+        // byte-run lengths but NO common whitespace code point, so the
+        // dedent must strip NOTHING. The old min-byte-length algorithm
+        // stripped 3 bytes from both lines — caught byte-for-byte here.
+        AssertDedent("k: (\n   x\n\u3000y\n)\n", "   x\n\u3000y");
+    }
+
+    [Test]
+    public void MultilineDedentMixedTabsAndSpacesDivergingPrefixStripsNothing()
+    {
+        // "\t\tx" (2 tabs) vs "  y" (2 spaces): common code-point prefix
+        // is empty → keep both prefixes verbatim.
+        AssertDedent("k: (\n\t\tx\n  y\n)\n", "\t\tx\n  y");
+    }
+
+    [Test]
+    public void MultilineDedentBlankLinesDoNotConstrainThePrefix()
+    {
+        // The blank line contributes nothing and does not shrink the
+        // common prefix; it stays an empty line in the result.
+        AssertDedent("k: (\n  a\n\n  b\n)\n", "a\n\nb");
+    }
+
+    private static void AssertDedent(string doc, string expected)
+    {
+        var v = (KtavObject)Ktav.Loads(doc, Pure);
+        var s = (KtavString)v.Entries[0].Value!;
+        Assert.That(v.Entries, Has.Count.EqualTo(1));
+        // Byte-for-byte: over-stripping (min byte length) and
+        // under-stripping both change the encoded bytes.
+        Assert.That(Encoding.UTF8.GetBytes(s.Value),
+            Is.EqualTo(Encoding.UTF8.GetBytes(expected)),
+            $"stripped multiline of {doc.Replace("\n", "\\n")}");
+    }
+
     private static byte[] Concat(byte[] a, byte[] b)
     {
         var r = new byte[a.Length + b.Length];
