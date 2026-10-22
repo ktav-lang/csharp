@@ -203,11 +203,17 @@ public sealed class KtavException : Exception
 
     internal static KtavException WriterError(string reason, IReadOnlyList<string> path)
     {
+        var section = reason switch
+        {
+            "CRByte" or "BothFormsRequired" or "LeadingWhitespaceCollision"
+                or "TrailingWhitespaceCollision" => "§5.9.7",
+            _ => "§5.9.0",
+        };
         var message = "UnrepresentableAt: " + reason;
         if (path.Count > 0) message += " at [" + string.Join(" -> ", path) + "]";
         message += " (spec §5.9.0)";
         return new KtavException(message, "UnrepresentableAt", reason,
-            null, null, null, path, null, null, "§5.9.0");
+            null, null, null, path, null, null, section);
     }
 
     internal static KtavException InvalidUtf8(long start, long end) =>

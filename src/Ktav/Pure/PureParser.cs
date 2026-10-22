@@ -448,8 +448,8 @@ internal static class PureParser
                 throw PureError.UnbalancedBracket(lineNum, tS, tE, found, opener);
             }
             object? value = frame.Obj != null
-                ? (object?)frame.Obj.ToValue()
-                : (object?)PureObjBuilder.Materialise(frame.Items);
+                ? (object?)frame.Obj
+                : frame.Items;
             AttachChildValue(value, lineNum, tS, tE);
         }
 

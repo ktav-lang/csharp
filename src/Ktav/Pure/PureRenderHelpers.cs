@@ -259,7 +259,7 @@ internal static class PureRender
         if (i >= n || s[i] < '0' || s[i] > '9') return false;
         if (s[i] == '0' && i + 1 < n && (s[i + 1] == 'x' || s[i + 1] == 'o' || s[i + 1] == 'b'))
             return ScanRadixBody(s, i + 2, RadixOf(s[i + 1]));
-        return ScanDecimalBody(s, i, allowLeadingZero: false);
+        return ScanDecimalBody(s, i, allowLeadingZero: true);
     }
 
     private static int RadixOf(char p) => p == 'x' ? 16 : p == 'o' ? 8 : 2;
@@ -312,11 +312,6 @@ internal static class PureRender
         if (n == 0) return false;
         if (s[i] == '+' || s[i] == '-') i++;
         if (i >= n || s[i] < '0' || s[i] > '9') return false;
-        if (s[i] == '0' && i + 1 < n)
-        {
-            char nx = s[i + 1];
-            if ((nx >= '0' && nx <= '9') || nx == '_') return false;
-        }
         bool prevUs = false;
         // digits
         while (i < n)

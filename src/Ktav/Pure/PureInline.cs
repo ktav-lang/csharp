@@ -690,10 +690,6 @@ internal static class PureInline
             {
                 if (closeIdx == hi - 1)
                 {
-                    var (ilo, ihi) = PureUtf8.TrimInline(b, lo + 1, hi - 1);
-                    if (ilo >= ihi)
-                        return first == '{' ? (object?)new PureObjBuilder()
-                            : (object?)new List<object?>();
                     return first == '{'
                         ? (object?)ParseInlineObjectInner(b, lo, hi, line, spanS, spanE,
                             depth + 1, strict, bounds, hasQuotes)

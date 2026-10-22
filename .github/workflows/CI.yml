@@ -274,12 +274,12 @@ jobs:
           # `Ktav.Loads` would resolve ambiguously (CS0104). Args[0] picks
           # the mode; each mode exercises the full pure surface.
           cat > Program.cs <<'EOF'
-          using KtavApi = Ktav.Ktav;
-          using KtavBackend = Ktav.KtavBackend;
-          using KtavObject = Ktav.KtavObject;
-          using KtavArray = Ktav.KtavArray;
-          using KtavString = Ktav.KtavString;
-          using KtavException = Ktav.KtavException;
+          using KtavApi = global::Ktav.Ktav;
+          using KtavBackend = global::Ktav.KtavBackend;
+          using KtavObject = global::Ktav.KtavObject;
+          using KtavArray = global::Ktav.KtavArray;
+          using KtavString = global::Ktav.KtavString;
+          using KtavException = global::Ktav.KtavException;
 
           // Packaged import, no native lib. Exits non-zero on any
           // failure; prints the mode's marker on success.

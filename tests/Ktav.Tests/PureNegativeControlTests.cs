@@ -94,10 +94,12 @@ public class PureNegativeControlTests
     }
 
     [Test]
-    public void DottedKeyBlockedDescendIsKeyPathConflict()
+    public void DottedKeyLeafOccupiedIsDuplicateKey()
     {
+        // Rust insert.rs:249–257: занятый конечный сегмент — DuplicateKey.
         var e = Error("a.b.c: 1\na.b: 2\n");
-        Assert.That(e.Error, Is.EqualTo("KeyPathConflict"));
+        Assert.That(e.Error, Is.EqualTo("DuplicateKey"));
+        Assert.That(e.Path, Is.EqualTo(new[] { "a", "b" }));
     }
 
     // -------- inline depth limit (128) --------

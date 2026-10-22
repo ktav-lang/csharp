@@ -41,7 +41,7 @@ internal static class PureCanonical
         if (wrap)
         {
             stack.Out.Append("[\n"); // first content line is `[` itself (§5.9.3)
-            stack.Push(new Task(Task.KClose, 1, ']'));
+            stack.Push(new Task(Task.KClose, 0, ']'));
             stack.Push(new Task(Task.KItems, arr, 0, 1, rootFirst: false));
         }
         else
