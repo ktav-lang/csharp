@@ -52,7 +52,7 @@ internal static class PureInline
         private int _segAt;
         private readonly List<int> _stackKind = new();      // opener byte per scope
         private readonly List<byte> _stackSaved = new();    // packed saved flags
-        internal readonly List<string> Segments = new();
+        internal readonly List<(int s, int e)> Segments = new();
         private List<(int o, int c)> _pairs = new();
         private readonly List<(int open, bool pure, int entry)> _openAt = new();
 
@@ -160,7 +160,7 @@ internal static class PureInline
                 {
                     if (_commaSplits)
                     {
-                        Segments.Add(Encoding.UTF8.GetString(b, segAt, i - segAt));
+                        Segments.Add((segAt, i));
                         segAt = i + 1;
                     }
                     bool scopeObject = _commaCtxScope
@@ -519,6 +519,7 @@ internal static class PureInline
         sc.SegStart = bodyObject;
         sc.ValueStart = !bodyObject;
         int stop = sc.Run();
+        segments.AddRange(sc.Segments);
         if (stop == Scanner.StopUnterminatedQuote)
         {
             unterminated = true;

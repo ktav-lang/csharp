@@ -269,12 +269,17 @@ jobs:
           dotnet new console -n KtavPkgConsumer -o . --force
           dotnet add package Ktav --version 0.8.1
 
-          # Fully qualified global::Ktav.Ktav.* calls: the namespace Ktav
+          # Fully qualified KtavApi.* calls: the namespace Ktav
           # also contains a type named Ktav, so `using Ktav;` + bare
           # `Ktav.Loads` would resolve ambiguously (CS0104). Args[0] picks
           # the mode; each mode exercises the full pure surface.
           cat > Program.cs <<'EOF'
-          using Ktav;
+          using KtavApi = Ktav.Ktav;
+          using KtavBackend = Ktav.KtavBackend;
+          using KtavObject = Ktav.KtavObject;
+          using KtavArray = Ktav.KtavArray;
+          using KtavString = Ktav.KtavString;
+          using KtavException = Ktav.KtavException;
 
           // Packaged import, no native lib. Exits non-zero on any
           // failure; prints the mode's marker on success.
@@ -310,16 +315,16 @@ jobs:
               // packaged default is Native; with KTAV_BACKEND=pure it is
               // Pure. A wrong default fails the run — never patched up
               // by UsePureBackend().
-              if (global::Ktav.Ktav.DefaultBackend != runDefault)
+              if (KtavApi.DefaultBackend != runDefault)
                   throw new InvalidOperationException(
-                      $"DefaultBackend was {global::Ktav.Ktav.DefaultBackend}, expected {runDefault}");
+                      $"DefaultBackend was {KtavApi.DefaultBackend}, expected {runDefault}");
 
               // Full pure-surface exercise through the PUBLIC API. Dotted
               // key "a.b" nests a→b (TryGet is a literal single-level
               // lookup), so traverse both levels explicitly.
               var v = (KtavObject)(explicitPure
-                  ? global::Ktav.Ktav.Loads(srcDoc, KtavBackend.Pure)
-                  : global::Ktav.Ktav.Loads(srcDoc));
+                  ? KtavApi.Loads(srcDoc, KtavBackend.Pure)
+                  : KtavApi.Loads(srcDoc));
               var a = (KtavObject)v.TryGet("a")!;
               if (((KtavArray)a.TryGet("b")!).Items.Count != 2)
                   throw new InvalidOperationException("Loads");
@@ -328,8 +333,8 @@ jobs:
 
               try
               {
-                  if (explicitPure) global::Ktav.Ktav.LoadsStrict(lossy, KtavBackend.Pure);
-                  else global::Ktav.Ktav.LoadsStrict(lossy);
+                  if (explicitPure) KtavApi.LoadsStrict(lossy, KtavBackend.Pure);
+                  else KtavApi.LoadsStrict(lossy);
                   throw new InvalidOperationException("strict must fail");
               }
               catch (KtavException e)
@@ -338,20 +343,20 @@ jobs:
                       $"expected LossyScalar, got {e.Error}");
               }
 
-              if ((explicitPure ? global::Ktav.Ktav.Dumps(v, KtavBackend.Pure)
-                                : global::Ktav.Ktav.Dumps(v)).Length == 0)
+              if ((explicitPure ? KtavApi.Dumps(v, KtavBackend.Pure)
+                                : KtavApi.Dumps(v)).Length == 0)
                   throw new InvalidOperationException("Dumps");
-              if ((explicitPure ? global::Ktav.Ktav.DumpsForceStrings(v, KtavBackend.Pure)
-                                : global::Ktav.Ktav.DumpsForceStrings(v)).Length == 0)
+              if ((explicitPure ? KtavApi.DumpsForceStrings(v, KtavBackend.Pure)
+                                : KtavApi.DumpsForceStrings(v)).Length == 0)
                   throw new InvalidOperationException("DumpsForceStrings");
-              if ((explicitPure ? global::Ktav.Ktav.EmitCanonical(v, KtavBackend.Pure)
-                                : global::Ktav.Ktav.EmitCanonical(v)).Length == 0)
+              if ((explicitPure ? KtavApi.EmitCanonical(v, KtavBackend.Pure)
+                                : KtavApi.EmitCanonical(v)).Length == 0)
                   throw new InvalidOperationException("EmitCanonical");
-              if ((explicitPure ? global::Ktav.Ktav.Format("## c\na:   1\n", KtavBackend.Pure)
-                                : global::Ktav.Ktav.Format("## c\na:   1\n")).Length == 0)
+              if ((explicitPure ? KtavApi.Format("## c\na:   1\n", KtavBackend.Pure)
+                                : KtavApi.Format("## c\na:   1\n")).Length == 0)
                   throw new InvalidOperationException("Format");
-              if ((explicitPure ? global::Ktav.Ktav.CanonicalFromSource("a: 1\n", KtavBackend.Pure)
-                                : global::Ktav.Ktav.CanonicalFromSource("a: 1\n")) == null)
+              if ((explicitPure ? KtavApi.CanonicalFromSource("a: 1\n", KtavBackend.Pure)
+                                : KtavApi.CanonicalFromSource("a: 1\n")) == null)
                   throw new InvalidOperationException("CanonicalFromSource");
           }
           catch (Exception e)
