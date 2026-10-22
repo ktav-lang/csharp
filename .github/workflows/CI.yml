@@ -367,7 +367,7 @@ jobs:
       # (c) Run 1: KTAV_BACKEND explicitly REMOVED — proves the packaged
       # startup default is Native (enum observation only) and that every
       # explicit pure operation succeeds with zero native artifacts.
-      - name: Run consumer (env unset: default must be Native, pure per-call ops)
+      - name: "Run consumer (env unset: default must be Native, pure per-call ops)"
         run: |
           set -e
           cd "$RUNNER_TEMP/ktav-pkg-consumer"
@@ -378,7 +378,7 @@ jobs:
       # (d) Run 2: KTAV_BACKEND=pure — default must be Pure and the
       # default-argument operations must succeed. (Fresh process: the
       # static initializer re-reads the env var.)
-      - name: Run consumer (KTAV_BACKEND=pure: default must be Pure, default-arg ops)
+      - name: "Run consumer (KTAV_BACKEND=pure: default must be Pure, default-arg ops)"
         run: |
           set -e
           cd "$RUNNER_TEMP/ktav-pkg-consumer"
