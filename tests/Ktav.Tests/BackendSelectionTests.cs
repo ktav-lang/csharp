@@ -11,12 +11,9 @@ namespace Ktav.Tests;
 /// No test here assumes the INCOMING process default is Native — CI runs
 /// the whole suite under KTAV_BACKEND=pure — so every global-flip test
 /// captures Ktav.DefaultBackend at entry and restores exactly that value
-/// in finally. The isolation test proves the pure backend NEVER touches
-/// the native loader: with the loader pinned to a nonexistent file
-/// (mirroring a machine with no ktav_cabi anywhere — KTAV_LIB_PATH
-/// pointing at a missing path takes precedence over runtimes/ and the
-/// download cache, per NativeLoader's documented resolution order),
-/// every native call must fail while every pure call still succeeds.
+/// in finally. Проверка отсутствия native выполняется в отдельном
+/// StandaloneConsumer: уже загруженные P/Invoke exports кэшируются CLR
+/// и не выгружаются при смене пути в текущем тестовом процессе.
 /// </summary>
 [TestFixture]
 public class BackendSelectionTests
@@ -63,21 +60,13 @@ public class BackendSelectionTests
     }
 
     [Test]
-    public void PureOpsSucceedWithNativeGuaranteedAbsent()
+    public void PureOpsSucceedWithNativePathPinnedAbsent()
     {
-        // Pin the loader to a file that cannot exist. This mirrors a
-        // consumer box with no native artifact: KTAV_LIB_PATH (or the
-        // equivalent test hook) set to a missing file makes EVERY native
-        // resolution path fail — the override short-circuits the NuGet
-        // runtimes/ layout and the GitHub download cache.
+        // Свежий процесс проверяет native-отказ отдельно: CLR может уже
+        // хранить ранее привязанные exports в этом тестовом процессе.
         NativeLoader.SetLibraryPath(MissingLibPath);
         try
         {
-            // Native is genuinely unreachable now.
-            Assert.Throws<DllNotFoundException>(() => Ktav.Loads("a: 1\n", KtavBackend.Native),
-                "native Loads must fail while the library is pinned absent");
-
-            // ...but pure mode never goes near the loader.
             var v = Ktav.Loads("a.b: [1, 2]\nc: :: raw\n", KtavBackend.Pure);
             Assert.That(v.ToString(), Is.Not.Empty);
             Assert.That(Ktav.LoadsStrict("a: 1\n", KtavBackend.Pure).ToString(), Is.Not.Empty);

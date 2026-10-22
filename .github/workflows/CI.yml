@@ -196,6 +196,7 @@ jobs:
           app="$RUNNER_TEMP/ktav-standalone/consumer/bin/Release/net8.0/StandaloneConsumer.dll"
           dotnet "$app" | tee "$RUNNER_TEMP/ktav-standalone/consumer.log"
           grep -q KTAV_STANDALONE_PURE_OK "$RUNNER_TEMP/ktav-standalone/consumer.log"
+          grep -q KTAV_STANDALONE_NATIVE_ABSENT_OK "$RUNNER_TEMP/ktav-standalone/consumer.log"
           if find "$RUNNER_TEMP/ktav-standalone/consumer/bin/Release/net8.0" -type f \
             \( -iname '*.dll' ! -iname 'Ktav.dll' ! -iname 'StandaloneConsumer.dll' -o -iname 'ktav_cabi*' -o -iname 'libktav_cabi*' \) | grep -q .; then
             echo "Unexpected third-party/native runtime file after consumer build" >&2

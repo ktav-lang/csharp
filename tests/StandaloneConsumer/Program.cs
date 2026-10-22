@@ -64,6 +64,20 @@ internal static class Program
         if (formatError.Span?.Start != 3 || formatError.Span?.End != 4 || formatError.SpecSection != "§6.1")
             throw new InvalidOperationException("Formatter error span");
         CheckAssemblies();
+        var missingNative = Environment.GetEnvironmentVariable("KTAV_LIB_PATH");
+        if (string.IsNullOrEmpty(missingNative) || File.Exists(missingNative))
+            throw new InvalidOperationException("Expected a pinned missing native path");
+        bool nativeRefused = false;
+        try
+        {
+            global::Ktav.Ktav.Loads("a: 1\n", KtavBackend.Native);
+        }
+        catch (DllNotFoundException error) when (error.Message.Contains(missingNative, StringComparison.Ordinal))
+        {
+            nativeRefused = true;
+        }
+        if (!nativeRefused) throw new InvalidOperationException("Native unexpectedly succeeded in standalone process");
+        Console.WriteLine("KTAV_STANDALONE_NATIVE_ABSENT_OK");
         Console.WriteLine("KTAV_STANDALONE_PURE_OK");
         return 0;
     }

@@ -36,9 +36,10 @@ public class PureRuntimeRepairTests
 
     [TestCase("[{}, 2]\n", "[\n    {}\n    2\n]\n")]
     [TestCase("[[1], [2]]\n", "[\n    [\n        1\n    ]\n    [\n        2\n    ]\n]\n")]
-    public void CanonicalRootArrayCloserUsesRootIndentation(string source, string expected)
+    public void CanonicalAndFormattedRootArrayClosersUseRootIndentation(string source, string expected)
     {
         Assert.That(KtavApi.CanonicalFromSource(source, KtavBackend.Pure), Is.EqualTo(expected));
+        Assert.That(KtavApi.Format(source, KtavBackend.Pure), Is.EqualTo(expected));
     }
 
     [Test]

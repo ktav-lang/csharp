@@ -666,7 +666,7 @@ internal static class PureFormatter
             if (needsWrap)
             {
                 Out.Append("[\n");
-                _tasks.Add(new Task(Task.KClose, 1, ']'));
+                _tasks.Add(new Task(Task.KClose, 0, ']'));
                 PushArrayItems(arr, 1);
             }
             else
