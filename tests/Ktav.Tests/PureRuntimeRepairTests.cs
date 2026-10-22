@@ -40,6 +40,16 @@ public class PureRuntimeRepairTests
     {
         Assert.That(KtavApi.CanonicalFromSource(source, KtavBackend.Pure), Is.EqualTo(expected));
         Assert.That(KtavApi.Format(source, KtavBackend.Pure), Is.EqualTo(expected));
+        var value = KtavApi.Loads(source, KtavBackend.Pure);
+        Assert.That(KtavApi.Dumps(value, KtavBackend.Pure), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ForceStringsRootArrayCloserUsesRootIndentation()
+    {
+        var value = KtavApi.Loads("[{}, 2]\n", KtavBackend.Pure);
+        Assert.That(KtavApi.DumpsForceStrings(value, KtavBackend.Pure),
+            Is.EqualTo("[\n    {}\n    :: 2\n]\n"));
     }
 
     [Test]

@@ -66,7 +66,7 @@ internal static class PureWriter
                     if (arr.Items[0] is KtavObject or KtavArray)
                     {
                         Out.Append("[\n");
-                        _tasks.Add(new Task(Task.KClose, 1, ']'));
+                        _tasks.Add(new Task(Task.KClose, 0, ']'));
                         _tasks.Add(new Task(Task.KItems, arr, 0, 1, rootFirst: false));
                     }
                     else
