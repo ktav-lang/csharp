@@ -497,7 +497,7 @@ internal static class PureEditSplice
             bool itemRaw = pc.RoleItemBlock &&
                 (PureRender.ItemNeedsRawMarker(str) ||
                  (pc.RootFirst && (BareItemIsPairCandidate(str) ||
-                     (str.Length > 0 && str[0] == '\uFEFF')))));
+                     (str.Length > 0 && str[0] == '\uFEFF'))));
             bool pairRaw = !pc.RoleItemBlock && PureRender.NeedsRawMarker(str);
             if (itemRaw)
                 return new Plan { From = b0, Prefix0 = ":: ", Body = str };
