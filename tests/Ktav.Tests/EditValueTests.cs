@@ -540,10 +540,10 @@ public class EditValueTests
             }
         }
 
-        var reversed = ((KtavObject)ParsePure("a: {y: 2, x: 1}")).Get("a")!;
+        var reversed = ((KtavObject)ParsePure("a: {y: 2, x: 1}")).TryGet("a")!;
         CheckNoop("a: {x: 1, y: 2}\n", new[] { "a" }, reversed);
         // Nested: the order-insensitive equality recurses.
-        var reversedNested = ((KtavObject)ParsePure("a: {n: {q: 2, p: 1}, z: 0}")).Get("a")!;
+        var reversedNested = ((KtavObject)ParsePure("a: {n: {q: 2, p: 1}, z: 0}")).TryGet("a")!;
         CheckNoop("a: {z: 0, n: {p: 1, q: 2}}\n", new[] { "a" }, reversedNested);
     }
 
@@ -653,6 +653,6 @@ public class EditValueTests
     public void NoopIsByteIdenticalEvenNoncanonical()
     {
         string source = "a:  0007\nb: { x: 1 }\n";
-        Check(source, new[] { "a" }, ((KtavObject)ParsePure("a: 0007\n")).Get("a")!, source);
+        Check(source, new[] { "a" }, ((KtavObject)ParsePure("a: 0007\n")).TryGet("a")!, source);
     }
 }
