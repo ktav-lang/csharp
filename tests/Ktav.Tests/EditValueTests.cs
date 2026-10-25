@@ -665,6 +665,21 @@ public class EditValueTests
     }
 
     [Test]
+    public void InlineSplitWithoutMemoUsesAbsoluteCloser()
+    {
+        var source = Encoding.UTF8.GetBytes("[{x: old, untouched: [1, 2]}, {keep: yes}]");
+        var segments = new List<(int s, int e)>();
+        global::Ktav.Pure.PureInline.SplitTopLevel(source, 1, source.Length - 1,
+            false, 1, 0, source.Length, null, false, segments, out bool unterminated);
+        Assert.That(unterminated, Is.False);
+        Assert.That(segments.Count, Is.EqualTo(2));
+        Assert.That(Encoding.UTF8.GetString(source, segments[0].s, segments[0].e - segments[0].s),
+            Is.EqualTo("{x: old, untouched: [1, 2]}"));
+        Assert.That(Encoding.UTF8.GetString(source, segments[1].s, segments[1].e - segments[1].s).Trim(),
+            Is.EqualTo("{keep: yes}"));
+    }
+
+    [Test]
     public void NoopIsByteIdenticalEvenNoncanonical()
     {
         string source = "a:  0007\nb: { x: 1 }\n";
