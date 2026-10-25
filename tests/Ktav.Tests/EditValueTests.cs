@@ -496,7 +496,7 @@ public class EditValueTests
         // same source-first phase).
         var raw = new byte[] { (byte)'a', (byte)':', (byte)' ', 0x80, (byte)'\n' };
         var ex7 = Assert.Throws<KtavException>(
-            () => Ktav.Pure.PureEdit.ApplySegments(raw, Array.Empty<string>(), S("x")))!;
+            () => global::Ktav.Pure.PureEdit.ApplySegments(raw, Array.Empty<string>(), S("x")))!;
         Assert.That(ex7.Error, Is.EqualTo("InvalidUtf8"), "UTF-8 validation must precede the segments check");
         Assert.That(ex7.Span!.Value.Start, Is.EqualTo(3), "first invalid byte offset");
     }
@@ -540,10 +540,10 @@ public class EditValueTests
             }
         }
 
-        var reversed = ParsePure("a: {y: 2, x: 1}").Get("a")!;
+        var reversed = ((KtavObject)ParsePure("a: {y: 2, x: 1}")).Get("a")!;
         CheckNoop("a: {x: 1, y: 2}\n", new[] { "a" }, reversed);
         // Nested: the order-insensitive equality recurses.
-        var reversedNested = ParsePure("a: {n: {q: 2, p: 1}, z: 0}").Get("a")!;
+        var reversedNested = ((KtavObject)ParsePure("a: {n: {q: 2, p: 1}, z: 0}")).Get("a")!;
         CheckNoop("a: {z: 0, n: {p: 1, q: 2}}\n", new[] { "a" }, reversedNested);
     }
 
@@ -653,6 +653,6 @@ public class EditValueTests
     public void NoopIsByteIdenticalEvenNoncanonical()
     {
         string source = "a:  0007\nb: { x: 1 }\n";
-        Check(source, new[] { "a" }, ParsePure("a: 0007\n").Get("a")!, source);
+        Check(source, new[] { "a" }, ((KtavObject)ParsePure("a: 0007\n")).Get("a")!, source);
     }
 }
