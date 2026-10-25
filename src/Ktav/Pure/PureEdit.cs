@@ -505,12 +505,17 @@ internal static class PureEdit
             if (b[i] == (byte)'\r') return i + 1 < b.Length && b[i + 1] == (byte)'\n' ? "\r\n" : "\r";
             i++;
         }
+        // Fallback (no terminator at/after pos): the LAST \r or \n before
+        // pos decides; a \n immediately preceded by \r is a CRLF pair.
+        int last = -1;
         for (i = Math.Min(pos, b.Length) - 1; i >= 0; i--)
         {
-            if (b[i] == (byte)'\r') return i + 1 < b.Length && b[i + 1] == (byte)'\n' ? "\r\n" : "\r";
-            if (b[i] == (byte)'\n') return "\n";
+            if (b[i] == (byte)'\r' || b[i] == (byte)'\n') { last = i; break; }
         }
-        return "\n";
+        if (last < 0) return "\n";
+        if (b[last] == (byte)'\r')
+            return last + 1 < b.Length && b[last + 1] == (byte)'\n' ? "\r\n" : "\r";
+        return last > 0 && b[last - 1] == (byte)'\r' ? "\r\n" : "\n";
     }
 
     /// <summary>Unicode scalar value count of [lo,hi) — the layout width unit
@@ -760,8 +765,10 @@ internal static class PureEdit
                     if (slo >= shi) continue; // trailing comma
                     if (!PureKey.FindUnescapedColon(_src, slo, shi, out int colon))
                         throw PureError.MalformedInlineCompound(lineNum, "inline-пара без разделителя", lo, hi);
-                    int colonAbs = slo + colon;
-                    int vLo = slo + colon + 1;
+                    // FindUnescapedColon reports the ABSOLUTE offset (see
+                    // PureInline.ParseInlineObjectInner: keyHi = colon).
+                    int colonAbs = colon;
+                    int vLo = colon + 1;
                     Node child;
                     if (vLo < shi && _src[vLo] == (byte)':')
                     {
@@ -775,7 +782,7 @@ internal static class PureEdit
                         child = InlineChild(valueAbs, shi, lineNum, depth, bounds);
                         child.Slot = Slot.Pair(colonAbs, valueAbs, shi);
                     }
-                    InsertNodePair(node.Table, slo, slo + colon, child, lineNum, slo, shi);
+                    InsertNodePair(node.Table, slo, colon, child, lineNum, slo, shi);
                 }
             }
             else

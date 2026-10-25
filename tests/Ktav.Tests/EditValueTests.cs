@@ -435,8 +435,13 @@ public class EditValueTests
             () => Ktav.EditValueSegments("a.b: 1\na.c: 2\n", new[] { "a" }, ParsePure("{b: 3, c: 4}"),
                 KtavBackend.Pure))!;
         Assert.That(ex.Error, Is.EqualTo("EditUnsupported"));
-        // Editable leaves inside the same target still work.
-        Check("a.b: 1\na.c: 2\n", new[] { "a", "b" }, S("9"), "a.b: 9\na.c: 2\n");
+        // Editable leaves inside the same target still work. String "9" is
+        // numeric-like: the raw marker preserves its String identity
+        // (mirror of the gold `\u00342` → `:: 42` layout regression);
+        // an Integer replacement keeps the plain marker.
+        Check("a.b: 1\na.c: 2\n", new[] { "a", "b" }, S("9"), "a.b:: 9\na.c: 2\n");
+        Check("a.b: 1\na.c: 2\n", new[] { "a", "b" }, new KtavInteger("9"),
+            "a.b: 9\na.c: 2\n");
     }
 
     [Test]
@@ -512,10 +517,20 @@ public class EditValueTests
     [Test]
     public void RealLeafChangePassesVerification()
     {
+        // String "9" is numeric-like → raw marker keeps String identity;
+        // Integer "9" keeps the plain marker (no grammar/encoder change).
         Check("a: 1\nb: 2\nc: 3\n", new[] { "b" }, S("9"),
+            "a: 1\nb:: 9\nc: 3\n");
+        Check("a: 1\nb: 2\nc: 3\n", new[] { "b" }, new KtavInteger("9"),
             "a: 1\nb: 9\nc: 3\n");
+        // Physically inline array item: `::` is literal data there, so the
+        // String provenance survives via the \uXXXX escape of the first
+        // scalar character (mirror of inline_body(replacement, true)).
         Check("outer: {inner: [1, old, 3], keep: yes}\n",
             new[] { "outer", "inner", "1" }, S("2"),
+            "outer: {inner: [1, \\u0032, 3], keep: yes}\n");
+        Check("outer: {inner: [1, old, 3], keep: yes}\n",
+            new[] { "outer", "inner", "1" }, new KtavInteger("2"),
             "outer: {inner: [1, 2, 3], keep: yes}\n");
     }
 

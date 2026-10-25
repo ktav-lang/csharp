@@ -48,10 +48,11 @@ internal static class PureEditLayout
             force, 0);
         if (expanded == null) return candidate;
 
-        var result = new byte[start + expanded.Length + (candidate.Length - newEnd)];
+        var expandedBytes = Encoding.UTF8.GetBytes(expanded);
+        var result = new byte[start + expandedBytes.Length + (candidate.Length - newEnd)];
         Array.Copy(candidate, 0, result, 0, start);
-        Array.Copy(Encoding.UTF8.GetBytes(expanded), 0, result, start, expanded.Length);
-        Array.Copy(candidate, newEnd, result, start + expanded.Length, candidate.Length - newEnd);
+        Array.Copy(expandedBytes, 0, result, start, expandedBytes.Length);
+        Array.Copy(candidate, newEnd, result, start + expandedBytes.Length, candidate.Length - newEnd);
         return result;
     }
 
