@@ -8,6 +8,8 @@ export default [
   "formatting",
   "source-edit-status",
   "edit",
+  "editing-cookbook",
+  "diagnostics09",
   "structured-errors-intro",
   "structured-errors-fields",
   "type-mapping",

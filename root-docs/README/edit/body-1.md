@@ -30,7 +30,7 @@ Guarantees:
 - Inline containers are expanded minimally (four-space indent, source
   line endings) only when a replacement would otherwise hurt
   readability; untouched nested branches stay inline. Whole inline
-  containers stay inline; emptied block containers keep their braces.
+  containers stay inline when readable; emptied block containers keep their braces.
 - After every patch the result is re-parsed and semantically verified,
   so a silent corruption is never returned. Both backends (native and
   pure) implement the same behaviour and are cross-checked in CI.
@@ -66,7 +66,7 @@ var out2 = Ktav.EditValueSegments(src, new[] { "targets", "storagehost", "addres
 - Inline-контейнеры раскрываются минимально (отступ 4 пробела, EOL
   исходника) только когда замена иначе ухудшает читаемость; нетронутые
   вложенные ветки остаются inline. Целые inline-контейнеры остаются
-  inline; опустевшие блочные сохраняют скобки.
+  inline, пока это читаемо; опустевшие блочные сохраняют скобки.
 - После каждого патча результат заново разбирается и семантически
   проверяется, поэтому молчаливая порча документа невозможна. Оба
   бэкенда (native и pure) ведут себя одинаково и сверяются в CI.
@@ -99,7 +99,7 @@ var out2 = Ktav.EditValueSegments(src, new[] { "targets", "storagehost", "addres
   返回输入，即使写法不规范。
 - 只有当替换会损害可读性时才最小化地展开 inline 容器（4 空格缩进、
   沿用源文件换行）；未触及的嵌套分支保持 inline。整体 inline 容器
-  保持 inline；被清空的块容器保留花括号。
+  在可读时保持 inline；被清空的块容器保留花括号。
 - 每次补丁后都会重新解析并做语义校验，因此不会悄悄返回损坏的文档。
   两个后端（native 与 pure）行为一致，并在 CI 中交叉验证。
 

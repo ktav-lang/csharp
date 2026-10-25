@@ -17,6 +17,10 @@ format itself — see
 - Apply 0.9 source diagnostics and the pinned 412-case conformance corpus, including 72 diagnostic fixtures with raw UTF-8 byte locations and EOF opener spans.
 - Native uses the immutable preparing-0.9 core and C ABI 2; pure remains independent of native binaries. Package versions are unchanged; this functionality is not published in 0.8.1.
 
+### Documentation
+
+- Expand README examples for dotted and literal-key paths, mixed arrays, String/Integer identity, multiline unfolding, byte-identical no-op and BOM/CRLF/EOF preservation. Clarify 0.9 byte diagnostics, safe refusal, ABI 2 and standalone pure usage; these additions are not part of published 0.8.1.
+
 ## 0.8.1 — 2026-10-22
 
 ### Added
