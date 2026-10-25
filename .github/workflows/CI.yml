@@ -64,11 +64,30 @@ jobs:
         with:
           dotnet-version: ${{ matrix.dotnet }}
 
-      # Cargo.lock is committed pinned to the previous ktav patch
-      # release; move it to 0.8.1 explicitly so the build is reproducible
-      # instead of implicitly lockfile-updating.
-      - name: Pin ktav dependency to 0.8.1
-        run: cargo update -p ktav --precise 0.8.1
+      # The ktav core is pinned to an immutable git revision (source-edit
+      # core, ABI 2). Cargo.lock must reference exactly that revision — a
+      # drifted lockfile, a registry fallback, or a different rev must fail
+      # the build instead of silently building against another core.
+      - name: Verify immutable ktav core pin (rev 447a00bd012e8d3f347c7e1eb59c3f0d9a78332f, 0.9.0)
+        shell: python
+        run: |
+          import re, sys
+          rev = "447a00bd012e8d3f347c7e1eb59c3f0d9a78332f"
+          expected_source = "git+https://github.com/ktav-lang/rust?rev=" + rev + "#" + rev
+          blocks = [b for b in open("Cargo.lock", encoding="utf-8").read().split("[[package]]")
+                    if re.search(r'^name = "ktav"$', b, re.M)]
+          if len(blocks) != 1:
+              sys.exit("Cargo.lock must contain exactly one ktav core package, found %d" % len(blocks))
+          block = blocks[0]
+          version = re.search(r'^version = "(.*)"$', block, re.M)
+          source = re.search(r'^source = "(.*)"$', block, re.M)
+          if version is None or version.group(1) != "0.9.0":
+              sys.exit("ktav core version must be 0.9.0, got %r" % (version.group(1) if version else None))
+          if source is None or source.group(1) != expected_source:
+              sys.exit(
+                  "ktav core source must be the immutable git pin\n  " + expected_source +
+                  "\ngot\n  " + str(source.group(1) if source else None) +
+                  "\n(registry or rev-mismatched cores are rejected; the resolved commit after '#' must equal the rev)")
 
       - name: Build native library
         run: cargo build --release -p ktav-cabi
@@ -130,9 +149,27 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      # Same committed-lockfile pin as the release/test jobs.
-      - name: Pin ktav dependency to 0.8.1
-        run: cargo update -p ktav --precise 0.8.1
+      # Same immutable core pin check as the release/test jobs.
+      - name: Verify immutable ktav core pin (rev 447a00bd012e8d3f347c7e1eb59c3f0d9a78332f, 0.9.0)
+        shell: python
+        run: |
+          import re, sys
+          rev = "447a00bd012e8d3f347c7e1eb59c3f0d9a78332f"
+          expected_source = "git+https://github.com/ktav-lang/rust?rev=" + rev + "#" + rev
+          blocks = [b for b in open("Cargo.lock", encoding="utf-8").read().split("[[package]]")
+                    if re.search(r'^name = "ktav"$', b, re.M)]
+          if len(blocks) != 1:
+              sys.exit("Cargo.lock must contain exactly one ktav core package, found %d" % len(blocks))
+          block = blocks[0]
+          version = re.search(r'^version = "(.*)"$', block, re.M)
+          source = re.search(r'^source = "(.*)"$', block, re.M)
+          if version is None or version.group(1) != "0.9.0":
+              sys.exit("ktav core version must be 0.9.0, got %r" % (version.group(1) if version else None))
+          if source is None or source.group(1) != expected_source:
+              sys.exit(
+                  "ktav core source must be the immutable git pin\n  " + expected_source +
+                  "\ngot\n  " + str(source.group(1) if source else None) +
+                  "\n(registry or rev-mismatched cores are rejected; the resolved commit after '#' must equal the rev)")
 
       # DEBUG build (deliberately WITHOUT --release): debug assertions
       # make the null-slice defect abort instead of passing silently.

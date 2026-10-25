@@ -7,7 +7,9 @@ using System.Text.Json;
 
 namespace Ktav.Tests;
 
-internal sealed record CorpusFixture(string Path, HashSet<string> Flags);
+// Public (test assembly only) so the public TestCaseSource-driven test
+// methods can take it as a parameter (CS0051); it carries plain data only.
+public sealed record CorpusFixture(string Path, HashSet<string> Flags);
 
 internal sealed class CorpusManifest
 {
@@ -16,6 +18,18 @@ internal sealed class CorpusManifest
         {
             ["valid"] = 228,
             ["invalid"] = 90,
+            ["unrepresentable"] = 5,
+            ["parseable-unrepresentable"] = 4,
+            ["strict-lossy"] = 13,
+        };
+
+    /// <summary>Spec 0.9 pinned counts (162 invalid include the 72 new
+    /// diagnostics09 fixtures: 30 EOF + 42 malformed UTF-8).</summary>
+    internal static readonly IReadOnlyDictionary<string, int> PinnedCounts09 =
+        new Dictionary<string, int>
+        {
+            ["valid"] = 228,
+            ["invalid"] = 162,
             ["unrepresentable"] = 5,
             ["parseable-unrepresentable"] = 4,
             ["strict-lossy"] = 13,
@@ -100,6 +114,15 @@ internal sealed class CorpusManifest
         string manifestPath = Path.Combine(root, "manifest.json");
         if (!File.Exists(manifestPath)) throw new FileNotFoundException("spec corpus manifest missing", manifestPath);
         return Parse(File.ReadAllBytes(manifestPath), root);
+    }
+
+    /// <summary>0.9 corpus guard: same manifest schema, different pinned counts.</summary>
+    internal static CorpusManifest ValidatePinnedWithCounts(string root,
+        IReadOnlyDictionary<string, int> expectedCounts)
+    {
+        string manifestPath = Path.Combine(root, "manifest.json");
+        if (!File.Exists(manifestPath)) throw new FileNotFoundException("spec 0.9 corpus manifest missing", manifestPath);
+        return Parse(File.ReadAllBytes(manifestPath), root, expectedCounts);
     }
 
     private static CorpusManifest ValidateCorpus(string root, Dictionary<string, int> counts,

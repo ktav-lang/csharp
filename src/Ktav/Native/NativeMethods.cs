@@ -4,10 +4,11 @@ using System.Runtime.InteropServices;
 namespace Ktav;
 
 /// <summary>
-/// P/Invoke surface to the <c>ktav_cabi</c> shared library. Nine
-/// functions, all using the "caller-owned input pointer, callee-owned
-/// output buffer" pattern. The output buffer (success or error) MUST
-/// be freed via <see cref="ktav_free"/>.
+/// P/Invoke surface to the <c>ktav_cabi</c> shared library. Twelve
+/// functions (including <c>ktav_abi_version</c> and the two spec-0.9
+/// edit exports, ABI version 2), all using the "caller-owned input
+/// pointer, callee-owned output buffer" pattern. The output buffer
+/// (success or error) MUST be freed via <see cref="ktav_free"/>.
 /// </summary>
 internal static partial class NativeMethods
 {
@@ -66,6 +67,27 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibName)]
     public static partial IntPtr ktav_version();
+
+    // spec 0.9 lossless edit exports (ABI_VERSION 2: additive symbols +
+    // version bump).
+    [LibraryImport(LibName)]
+    public static partial int ktav_abi_version();
+
+    [LibraryImport(LibName)]
+    public static partial int ktav_edit_value(
+        IntPtr src, nuint srcLen,
+        IntPtr path, nuint pathLen,
+        IntPtr replacement, nuint replacementLen,
+        out IntPtr outBuf, out nuint outLen,
+        out IntPtr outErr, out nuint outErrLen);
+
+    [LibraryImport(LibName)]
+    public static partial int ktav_edit_value_segments(
+        IntPtr src, nuint srcLen,
+        IntPtr path, nuint pathLen,
+        IntPtr replacement, nuint replacementLen,
+        out IntPtr outBuf, out nuint outLen,
+        out IntPtr outErr, out nuint outErrLen);
 #else
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int ktav_loads(
@@ -114,5 +136,26 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern IntPtr ktav_version();
+
+    // spec 0.9 lossless edit exports (ABI_VERSION 2: additive symbols +
+    // version bump).
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_abi_version();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_edit_value(
+        IntPtr src, UIntPtr srcLen,
+        IntPtr path, UIntPtr pathLen,
+        IntPtr replacement, UIntPtr replacementLen,
+        out IntPtr outBuf, out UIntPtr outLen,
+        out IntPtr outErr, out UIntPtr outErrLen);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_edit_value_segments(
+        IntPtr src, UIntPtr srcLen,
+        IntPtr path, UIntPtr pathLen,
+        IntPtr replacement, UIntPtr replacementLen,
+        out IntPtr outBuf, out UIntPtr outLen,
+        out IntPtr outErr, out UIntPtr outErrLen);
 #endif
 }

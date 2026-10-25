@@ -197,7 +197,8 @@ internal static class PureInline
                         var scan = ScanInlineCloser(b, i, hi, o, c, _line, _spanS, _spanE, out pos);
                         if (scan)
                         {
-                            i += pos + 1;
+                            // ScanInlineCloser возвращает абсолютный offset.
+                            i = pos + 1;
                             valueStart = false;
                             if (_trackQuotes) segStart = false;
                             continue;

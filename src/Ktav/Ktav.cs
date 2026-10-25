@@ -267,6 +267,100 @@ public static class Ktav
     }
 
     /// <summary>
+    /// Replace the value at <paramref name="path"/> in Ktav source text
+    /// (spec 0.9 lossless edit). Only the target's bytes change: comments,
+    /// whitespace, key spelling/order, BOM, EOL style, and the presence or
+    /// absence of a final newline are preserved. Inline wrappers are
+    /// expanded minimally when a replacement would hurt readability.
+    /// </summary>
+    /// <param name="src">Ktav source text; must parse.</param>
+    /// <param name="path">Dotted textual path: <c>key1.key2.0.key4</c>;
+    /// <c>\.</c> is a literal dot, <c>\\</c> a literal backslash.</param>
+    /// <param name="replacement">The replacement value (any shape, including
+    /// scalars). Integers keep arbitrary precision.</param>
+    /// <returns>The patched source text (a new string; the input is not
+    /// mutated).</returns>
+    /// <exception cref="KtavException">
+    /// <c>EditInvalidPath</c> (malformed path, <see cref="KtavException.Body"/>
+    /// is the UTF-8 byte offset), <c>EditNotFound</c> (missing key / index
+    /// overflow / scalar descent), <c>EditUnsupported</c> (no lossless patch,
+    /// e.g. a noncontiguous dotted/reopen target or comments inside a
+    /// structurally replaced container), or the native parse envelope when
+    /// the source itself does not parse.</exception>
+    public static string EditValue(string src, string path, KtavValue replacement) =>
+        EditValue(src, path, replacement, DefaultBackend);
+
+    /// <inheritdoc cref="EditValue(string, string, KtavValue)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string EditValue(string src, string path, KtavValue replacement, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (path == null) throw new ArgumentNullException(nameof(path));
+        if (replacement == null) throw new ArgumentNullException(nameof(replacement));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureEdit.Apply(bytes, path, replacement);
+        NativeLoader.EnsureRegistered();
+        // No host-side wire normalisation here: the native core already
+        // canonicalises tagged numeric payloads AFTER its own source-first
+        // parse (cabi wire_to_any_value), and pre-normalising would move
+        // payload failures ahead of the source error. Invalid payloads /
+        // source errors surface from the core with the correct priority.
+        var output = CallNative3(NativeOp.EditValue, bytes,
+            Encoding.UTF8.GetBytes(path), WireJson.Encode(replacement));
+        return Encoding.UTF8.GetString(output);
+    }
+
+    /// <summary>
+    /// <see cref="EditValue(string, string, KtavValue)"/> with pre-decoded
+    /// literal segments: no additional unescaping is performed. A numeric
+    /// segment addresses a string key inside an <see cref="KtavObject"/> and
+    /// a zero-based ASCII-digit index inside an <see cref="KtavArray"/>
+    /// (leading zeros allowed, signs are not indexes). An empty segment list
+    /// is <c>EditNotFound</c>.
+    /// </summary>
+    public static string EditValueSegments(string src, IReadOnlyList<string> segments, KtavValue replacement) =>
+        EditValueSegments(src, segments, replacement, DefaultBackend);
+
+    /// <inheritdoc cref="EditValueSegments(string, IReadOnlyList{string}, KtavValue)"/>
+    /// <param name="backend">Implementation choice (overrides the default).</param>
+    public static string EditValueSegments(string src, IReadOnlyList<string> segments,
+        KtavValue replacement, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (segments == null) throw new ArgumentNullException(nameof(segments));
+        if (replacement == null) throw new ArgumentNullException(nameof(replacement));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureEdit.ApplySegments(bytes, segments, replacement);
+        NativeLoader.EnsureRegistered();
+        // See EditValue: no host-side normalisation on the native branch —
+        // the core canonicalises its wire input itself, source-first.
+        var output = CallNative3(NativeOp.EditValueSegments, bytes,
+            EncodeSegments(segments), WireJson.Encode(replacement));
+        return Encoding.UTF8.GetString(output);
+    }
+
+    /// <summary>UTF-8 JSON array of literal strings (the segments transport).</summary>
+    private static byte[] EncodeSegments(IReadOnlyList<string> segments)
+    {
+        using var stream = new System.IO.MemoryStream(64);
+        using (var writer = new System.Text.Json.Utf8JsonWriter(stream,
+            new System.Text.Json.JsonWriterOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            }))
+        {
+            writer.WriteStartArray();
+            foreach (var segment in segments)
+            {
+                if (segment == null) throw new ArgumentException("null path segment", nameof(segments));
+                writer.WriteStringValue(segment);
+            }
+            writer.WriteEndArray();
+        }
+        return stream.ToArray();
+    }
+
+    /// <summary>
     /// Version of the loaded <c>ktav_cabi</c>. Useful for sanity checks
     /// against <see cref="ExpectedNativeVersion"/>.
     /// </summary>
@@ -284,7 +378,106 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource }
+    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource, EditValue, EditValueSegments }
+
+    /// <summary>ABI shape gate: the loaded binary must report exactly
+    /// <see cref="NativeLoader.ExpectedAbiVersion"/> (2 since 0.9). An old
+    /// (ABI 1) binary is rejected with a clear version-mismatch error —
+    /// never a silent pure fallback.</summary>
+    private static int _abiChecked;
+
+    private static void EnsureAbiCompatible()
+    {
+        if (Volatile.Read(ref _abiChecked) == 1) return;
+        int actual;
+        try
+        {
+            actual = NativeMethods.ktav_abi_version();
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new KtavException(
+                "loaded ktav_cabi does not export ktav_abi_version; the native binary " +
+                "predates ABI " + NativeLoader.ExpectedAbiVersion + " and cannot serve this build", ex);
+        }
+        if (actual != NativeLoader.ExpectedAbiVersion)
+            throw new KtavException(
+                "ktav_cabi ABI version mismatch: expected " + NativeLoader.ExpectedAbiVersion +
+                ", got " + actual + "; the loaded native binary does not match this build");
+        Volatile.Write(ref _abiChecked, 1);
+    }
+
+    /// <summary>Three-input native op (src, path/segments, replacement);
+    /// used by the spec-0.9 edit exports. An old native binary that lacks
+    /// the new symbols must surface a clear version/symbol error — never a
+    /// silent pure fallback.</summary>
+    private static byte[] CallNative3(NativeOp op, byte[] src, byte[] path, byte[] replacement)
+    {
+        EnsureAbiCompatible();
+        IntPtr srcPtr = IntPtr.Zero, pathPtr = IntPtr.Zero, replPtr = IntPtr.Zero;
+        try
+        {
+            srcPtr = Marshal.AllocHGlobal(Math.Max(src.Length, 1));
+            if (src.Length > 0) Marshal.Copy(src, 0, srcPtr, src.Length);
+            pathPtr = Marshal.AllocHGlobal(Math.Max(path.Length, 1));
+            if (path.Length > 0) Marshal.Copy(path, 0, pathPtr, path.Length);
+            replPtr = Marshal.AllocHGlobal(Math.Max(replacement.Length, 1));
+            if (replacement.Length > 0) Marshal.Copy(replacement, 0, replPtr, replacement.Length);
+
+            int rc;
+#if NET8_0_OR_GREATER
+            IntPtr outBuf;
+            nuint outLen;
+            IntPtr outErr;
+            nuint outErrLen;
+            if (op == NativeOp.EditValue)
+                rc = NativeMethods.ktav_edit_value(srcPtr, (nuint)src.Length,
+                    pathPtr, (nuint)path.Length, replPtr, (nuint)replacement.Length,
+                    out outBuf, out outLen, out outErr, out outErrLen);
+            else
+                rc = NativeMethods.ktav_edit_value_segments(srcPtr, (nuint)src.Length,
+                    pathPtr, (nuint)path.Length, replPtr, (nuint)replacement.Length,
+                    out outBuf, out outLen, out outErr, out outErrLen);
+#else
+            IntPtr outBuf;
+            UIntPtr outLen;
+            IntPtr outErr;
+            UIntPtr outErrLen;
+            if (op == NativeOp.EditValue)
+                rc = NativeMethods.ktav_edit_value(srcPtr, (UIntPtr)src.Length,
+                    pathPtr, (UIntPtr)path.Length, replPtr, (UIntPtr)replacement.Length,
+                    out outBuf, out outLen, out outErr, out outErrLen);
+            else
+                rc = NativeMethods.ktav_edit_value_segments(srcPtr, (UIntPtr)src.Length,
+                    pathPtr, (UIntPtr)path.Length, replPtr, (UIntPtr)replacement.Length,
+                    out outBuf, out outLen, out outErr, out outErrLen);
+#endif
+            if (rc != 0)
+            {
+                var payload = CopyBytesAndFree(outErr, outErrLen);
+                FreeIfPresent(outBuf, outLen);
+                if (payload.Length == 0)
+                    throw new KtavException("native call failed with code " + rc);
+                throw KtavException.FromEnvelope(payload);
+            }
+            FreeIfPresent(outErr, outErrLen);
+            return CopyBytesAndFree(outBuf, outLen);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new KtavException(
+                "loaded ktav_cabi does not provide " + (op == NativeOp.EditValue
+                    ? "ktav_edit_value" : "ktav_edit_value_segments") +
+                "; the native binary predates the 0.9 edit ABI and cannot serve this call", ex);
+        }
+        finally
+        {
+            if (srcPtr != IntPtr.Zero) Marshal.FreeHGlobal(srcPtr);
+            if (pathPtr != IntPtr.Zero) Marshal.FreeHGlobal(pathPtr);
+            if (replPtr != IntPtr.Zero) Marshal.FreeHGlobal(replPtr);
+        }
+    }
+
 
     /// <summary>
     /// Pre-flight §5.9.0 validation of an untrusted value tree. Iterative
@@ -354,6 +547,7 @@ public static class Ktav
 
     private static byte[] CallNative(NativeOp op, byte[] input)
     {
+        EnsureAbiCompatible();
         IntPtr inputPtr = IntPtr.Zero;
         try
         {

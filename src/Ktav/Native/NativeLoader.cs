@@ -28,6 +28,15 @@ internal static class NativeLoader
     /// <summary>Version of <c>ktav_cabi</c> this build expects. Bump per release.</summary>
     public const string LibVersion = "0.8.1";
 
+    /// <summary>
+    /// ABI shape version this build requires (<c>ktav_abi_version()</c>).
+    /// Bumped 1 → 2 in 0.9: the lossless-edit exports were added and the
+    /// exported set changed (explicitly approved policy). An older binary
+    /// must be rejected with a version-mismatch error, never silently
+    /// replaced by the pure backend.
+    /// </summary>
+    public const int ExpectedAbiVersion = 2;
+
     private const string ReleaseBase =
         "https://github.com/ktav-lang/csharp/releases/download/v";
 
@@ -185,6 +194,7 @@ namespace Ktav;
 internal static class NativeLoader
 {
     public const string LibVersion = "0.8.1";
+    public const int ExpectedAbiVersion = 2;
     public static void EnsureRegistered() { /* no-op on netstandard2.0 */ }
 }
 #endif

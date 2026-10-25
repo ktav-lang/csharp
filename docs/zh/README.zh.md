@@ -118,6 +118,7 @@ string text = global::Ktav.Ktav.Dumps(doc);
 | `Ktav.DumpsForceStrings(KtavValue) -> string` | 同 `Dumps`，但通过原始标记 `::` 把每个叶子标量强制为 String。复合值保持结构。 |
 | `Ktav.EmitCanonical(KtavValue) -> string` | 把 `KtavValue` 输出为规范 Ktav（spec § 5.9）。 |
 | `Ktav.Format(string) -> string` | 把 Ktav 源文本格式化为规范化写法，**保留全部注释**。见下文。 |
+| `Ktav.EditValue(string, string, KtavValue) -> string` | 在源文本中按点分路径无损替换值。见“编辑源文本”一节。 |
 | `Ktav.CanonicalFromSource(string) -> string` | 一次调用完成解析并重新输出为规范 Ktav —— 相当于 `EmitCanonical(Loads(src))`，中间不产生 `KtavValue`。像 `EmitCanonical` 一样丢弃注释与空行。 |
 | `Ktav.NativeVersion()` | 已加载的 `ktav_cabi` 报告的版本字符串。 |
 | `Ktav.ExpectedNativeVersion` | 本次构建所对应的版本。 |
@@ -142,6 +143,39 @@ global::Ktav.Ktav.Format("## why\na:   {x: 1}\n");
 连续两个及以上空行会折叠成一个，紧贴括号内侧的空行填充会被丢弃，
 因此格式化是一个不动点：`Format(Format(x)) == Format(x)`。对于没有注释、
 没有空行的文档，输出等同于 `EmitCanonical(Loads(src))`。
+
+> **尚未发布（0.9 准备版本）：** 这些编辑 API 和更新后的诊断不包含在已发布的 0.8.1 包中。原生后端需要固定的 0.9 核心（C-FFI 使用 C ABI 2）；纯实现仍完全独立。
+
+## 编辑源文本
+
+`Ktav.EditValue` 直接**在源文本中**替换路径上的值 —— 这是无损拼接
+（splice），而不是“解析→修改→再序列化”的往返：
+
+```csharp
+var out1 = Ktav.EditValue(src, "targets.storagehost.address", new KtavString("10.0.0.9"));
+var out2 = Ktav.EditValueSegments(src, new[] { "targets", "storagehost", "address" }, new KtavString("10.0.0.9"));
+```
+
+| 成员 | 用途 |
+| --- | --- |
+| `Ktav.EditValue(string src, string path, KtavValue replacement) -> string` | 按点分文本路径替换值（`key1.key2.0.key4`；`\.` 表示字面点号，`\\` 表示字面反斜杠）。 |
+| `Ktav.EditValueSegments(string src, IReadOnlyList<string> segments, KtavValue replacement) -> string` | 同上，但传入已解码的字面段（不再做额外反转义）。 |
+
+保证：
+
+- 只支持*替换已有值* —— 不做创建/删除/重命名。缺失键、数组越界或
+  穿过标量下钻是 `EditNotFound`；路径非法是 `EditInvalidPath`
+  （`Body` 是出问题的 UTF-8 字节偏移）；当不存在无损补丁时 ——
+  由 dotted/reopen 行拼成的 noncontiguous 目标、结构化替换容器内部的
+  注释 —— 调用会以 `EditUnsupported` 拒绝。
+- 编辑范围之外的字节原样保留：注释、空白、键的写法与顺序、BOM、
+  CR/LF/CRLF 以及末尾换行的有无。无变化（no-op）的替换会按字节原样
+  返回输入，即使写法不规范。
+- 只有当替换会损害可读性时才最小化地展开 inline 容器（4 空格缩进、
+  沿用源文件换行）；未触及的嵌套分支保持 inline。整体 inline 容器
+  保持 inline；被清空的块容器保留花括号。
+- 每次补丁后都会重新解析并做语义校验，因此不会悄悄返回损坏的文档。
+  两个后端（native 与 pure）行为一致，并在 CI 中交叉验证。
 
 ## 结构化错误
 
@@ -264,6 +298,10 @@ Pure 需要现成的 `net8.0` `Ktav.dll` 和已安装兼容的 .NET 8 `Microsoft
 
 以上内容仅适用于**原生**后端。纯托管后端（[纯托管后端](#pure-backend)）
 不会使用 `$KTAV_LIB_PATH`、`runtimes/` 布局、缓存或网络。
+
+在第一次原生调用之前，托管层会把 `ktav_abi_version()` 与本构建要求的
+ABI 形态版本（自 0.9 的编辑导出起为 **2**）进行比对。较旧的二进制会被
+以清晰的版本不匹配错误拒绝 —— 绝不会静默回退到纯托管后端。
 
 ## 运行时支持
 

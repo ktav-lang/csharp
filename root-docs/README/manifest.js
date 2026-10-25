@@ -6,6 +6,8 @@ export default [
   "quick-start-build",
   "api",
   "formatting",
+  "source-edit-status",
+  "edit",
   "structured-errors-intro",
   "structured-errors-fields",
   "type-mapping",

@@ -220,6 +220,35 @@ public sealed class KtavException : Exception
         new KtavException("InvalidUtf8 (spec §6.15)", "InvalidUtf8", null,
             null, null, new KtavErrorSpan(start, end), null, null, null, "§6.15");
 
+    // ------------------------------------------------------------------
+    // Edit errors (spec 0.9): the same ten envelope fields, error one of
+    // EditInvalidPath / EditNotFound / EditUnsupported. body carries the
+    // decimal UTF-8 byte offset (InvalidPath) or the unsupported reason
+    // (Unsupported); every other location field stays null.
+    // ------------------------------------------------------------------
+
+    internal static KtavException EditInvalidPath(long offset) =>
+        new KtavException(
+            $"invalid edit path (bad escape or empty segment) at byte {offset}",
+            "EditInvalidPath", null, null, null, null, null,
+            offset.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            null, null);
+
+    internal static KtavException EditNotFound() =>
+        new KtavException("edit path does not address an existing value",
+            "EditNotFound", null, null, null, null, null, null, null, null);
+
+    internal static KtavException EditUnsupported(string reason) =>
+        new KtavException("no lossless source edit: " + reason,
+            "EditUnsupported", null, null, null, null, null, reason, null, null);
+
+    /// <summary>Transport-level failure (invalid wire payload, malformed
+    /// JSON): the core's <c>Message</c> envelope — no invented source
+    /// location, the text verbatim as <see cref="Exception.Message"/>.</summary>
+    internal static KtavException MessageEnvelope(string text) =>
+        new KtavException(text, "Message", null, null, null, null, null, null, null, null);
+
+
     private static string? GetStr(System.Text.Json.JsonElement root, string name)
     {
         return root.TryGetProperty(name, out var v) &&
