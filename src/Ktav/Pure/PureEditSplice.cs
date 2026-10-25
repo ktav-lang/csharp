@@ -417,7 +417,8 @@ internal static class PureEditSplice
         // first element of an implicit root array must be raw.
         if (pc.Slot == PureEdit.SlotKind.Item && pc.RootFirst)
         {
-            desiredRaw = desiredRaw || BareItemIsPairCandidate(s) || s.StartsWith('\uFEFF');
+            desiredRaw = desiredRaw || BareItemIsPairCandidate(s) ||
+                (s.Length > 0 && s[0] == '\uFEFF');
         }
         // Preserve an existing raw marker for a compatible one-line body.
         if (pc.ExistingRaw) desiredRaw = true;
@@ -495,7 +496,8 @@ internal static class PureEditSplice
                 return new Plan { From = b0, Body = "()" };
             bool itemRaw = pc.RoleItemBlock &&
                 (PureRender.ItemNeedsRawMarker(str) ||
-                 (pc.RootFirst && (BareItemIsPairCandidate(str) || str.StartsWith('\uFEFF'))));
+                 (pc.RootFirst && (BareItemIsPairCandidate(str) ||
+                     (str.Length > 0 && str[0] == '\uFEFF')))));
             bool pairRaw = !pc.RoleItemBlock && PureRender.NeedsRawMarker(str);
             if (itemRaw)
                 return new Plan { From = b0, Prefix0 = ":: ", Body = str };

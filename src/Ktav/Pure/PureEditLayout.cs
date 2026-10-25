@@ -56,7 +56,8 @@ internal static class PureEditLayout
     }
 
     private static bool IsCompound(string body) =>
-        (body.StartsWith('{') && body.EndsWith('}')) || (body.StartsWith('[') && body.EndsWith(']'));
+        (body.Length > 0 && body[0] == '{' && body[body.Length - 1] == '}') ||
+        (body.Length > 0 && body[0] == '[' && body[body.Length - 1] == ']');
 
     private static bool IsCompound(byte[] b, int lo, int hi) =>
         hi - lo >= 2 && ((b[lo] == (byte)'{' && b[hi - 1] == (byte)'}') ||

@@ -7,7 +7,9 @@ using System.Text.Json;
 
 namespace Ktav.Tests;
 
-internal sealed record CorpusFixture(string Path, HashSet<string> Flags);
+// Public (test assembly only) so the public TestCaseSource-driven test
+// methods can take it as a parameter (CS0051); it carries plain data only.
+public sealed record CorpusFixture(string Path, HashSet<string> Flags);
 
 internal sealed class CorpusManifest
 {
