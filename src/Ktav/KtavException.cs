@@ -245,7 +245,7 @@ public sealed class KtavException : Exception
     /// <summary>Transport-level failure (invalid wire payload, malformed
     /// JSON): the core's <c>Message</c> envelope — no invented source
     /// location, the text verbatim as <see cref="Exception.Message"/>.</summary>
-    internal static KtavException Message(string text) =>
+    internal static KtavException MessageEnvelope(string text) =>
         new KtavException(text, "Message", null, null, null, null, null, null, null, null);
 
 

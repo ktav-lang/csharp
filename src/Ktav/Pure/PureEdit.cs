@@ -311,7 +311,7 @@ internal static class PureEdit
         else if (s.Length > 0 && s[0] == '+') { sign = ""; digits = s.Substring(1); }
         else { sign = ""; digits = s; }
         if (digits.Length == 0 || !AllAsciiDigits(digits))
-            throw KtavException.Message("$i payload not an integer literal: \"" + s + "\"");
+            throw KtavException.MessageEnvelope("$i payload not an integer literal: \"" + s + "\"");
         string trimmed = digits.TrimStart('0');
         if (trimmed.Length == 0) return "0";
         return sign + trimmed;
@@ -366,9 +366,9 @@ internal static class PureEdit
         bool looksLikeFloat = s.IndexOf('.') >= 0 || s.IndexOf('e') >= 0 || s.IndexOf('E') >= 0;
         if (!double.TryParse(s, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out double val))
-            throw KtavException.Message("$f payload not a finite decimal: \"" + s + "\"");
+            throw KtavException.MessageEnvelope("$f payload not a finite decimal: \"" + s + "\"");
         if (!looksLikeFloat)
-            throw KtavException.Message("$f payload must contain '.' or exponent: \"" + s + "\"");
+            throw KtavException.MessageEnvelope("$f payload must contain '.' or exponent: \"" + s + "\"");
         if (double.IsNaN(val) || double.IsInfinity(val)) return s;
         return PureNum.RyuFormat(val);
     }
@@ -423,8 +423,8 @@ internal static class PureEdit
                 foreach (var f in ob.Entries) index.Add(f.Key, f.Value);
                 foreach (var e in oa.Entries)
                 {
-                    if (!index.TryGetValue(e.Key, out var fb)) return false;
-                    if (!EditValuesEqual(e.Value, fb)) return false;
+                    if (!index.TryGetValue(e.Key, out var matched)) return false;
+                    if (!EditValuesEqual(e.Value, matched)) return false;
                 }
                 return true;
             }

@@ -62,7 +62,7 @@ internal static class PureEditLayout
         hi - lo >= 2 && ((b[lo] == (byte)'{' && b[hi - 1] == (byte)'}') ||
                          (b[lo] == (byte)'[' && b[hi - 1] == (byte)']'));
 
-    private static (int, int)? SlotBody(PureEdit.Slot slot) =>
+    private static (int, int) SlotBody(PureEdit.Slot slot) =>
         (slot.B0, slot.Kind == PureEdit.SlotKind.Block ? slot.End : slot.B1);
 
     /// <summary>The smallest inline-compound ancestor containing the splice
