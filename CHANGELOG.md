@@ -11,6 +11,12 @@ This changelog tracks **binding releases**, not changes to the Ktav
 format itself — see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## Unreleased — 0.9 preparation
+
+- Add native and standalone pure editing by textual path or literal segments: source splicing, preserved container forms, minimal readability transitions, comment protection, byte-identical no-op and semantic verification.
+- Apply 0.9 source diagnostics and the pinned 412-case conformance corpus, including 72 diagnostic fixtures with raw UTF-8 byte locations and EOF opener spans.
+- Native uses the immutable preparing-0.9 core and C ABI 2; pure remains independent of native binaries. Package versions are unchanged; this functionality is not published in 0.8.1.
+
 ## 0.8.1 — 2026-10-22
 
 ### Added

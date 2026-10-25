@@ -27,6 +27,12 @@ All of the above applies to the **native** backend only. The pure
 managed backend ([Pure backend](#pure-backend)) never consults
 `$KTAV_LIB_PATH`, the `runtimes/` layout, the cache or the network.
 
+Before the first native call the managed layer checks
+`ktav_abi_version()` against the ABI shape this build requires
+(**2** since the 0.9 edit exports). An older binary is rejected with a
+clear version-mismatch error — it is never silently replaced by the
+pure backend.
+
 >>>>> lang=ru
 ## Как резолвится нативная библиотека
 
@@ -56,6 +62,12 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 управляемый бэкенд ([Чистый бэкенд](#pure-backend)) не обращается ни к
 `$KTAV_LIB_PATH`, ни к компоновке `runtimes/`, ни к кэшу, ни к сети.
 
+Перед первым нативным вызовом управляемый слой сверяет
+`ktav_abi_version()` с требуемой этим билдом версией формы ABI
+(**2** начиная с edit-экспортов 0.9). Более старый бинарник отклоняется
+с понятной ошибкой несовпадения версий — он никогда не подменяется
+тихим переключением на pure-бэкенд.
+
 >>>>> lang=zh
 ## 原生库的解析顺序
 
@@ -82,4 +94,8 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 
 以上内容仅适用于**原生**后端。纯托管后端（[纯托管后端](#pure-backend)）
 不会使用 `$KTAV_LIB_PATH`、`runtimes/` 布局、缓存或网络。
+
+在第一次原生调用之前，托管层会把 `ktav_abi_version()` 与本构建要求的
+ABI 形态版本（自 0.9 的编辑导出起为 **2**）进行比对。较旧的二进制会被
+以清晰的版本不匹配错误拒绝 —— 绝不会静默回退到纯托管后端。
 

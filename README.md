@@ -120,6 +120,7 @@ A complete runnable version lives in [`examples/Basic`](examples/Basic/Program.c
 | `Ktav.DumpsForceStrings(KtavValue) -> string` | Like `Dumps`, but coerces every leaf scalar to a String via the raw `::` marker. Compounds keep their structure. |
 | `Ktav.EmitCanonical(KtavValue) -> string` | Render a `KtavValue` as canonical Ktav (spec § 5.9). |
 | `Ktav.Format(string) -> string` | Format Ktav source into its normalised spelling, **keeping every comment**. See below. |
+| `Ktav.EditValue(string, string, KtavValue) -> string` | Losslessly replace the value at a dotted textual path in the source text. See the Editing section. |
 | `Ktav.CanonicalFromSource(string) -> string` | Parse and re-emit as canonical Ktav in one call — `EmitCanonical(Loads(src))` with no intermediate `KtavValue`. Drops comments and blank lines like `EmitCanonical` does. |
 | `Ktav.NativeVersion()` | Version string reported by the loaded `ktav_cabi`. |
 | `Ktav.ExpectedNativeVersion` | Version this build was compiled against. |
@@ -146,6 +147,44 @@ A run of two or more blank lines collapses to one, and blank padding
 immediately inside a bracket is dropped, which makes formatting a fixed
 point: `Format(Format(x)) == Format(x)`. For a document with no comments
 and no blank lines, the output equals `EmitCanonical(Loads(src))`.
+
+> **Unreleased (0.9 preparation):** These editing APIs and updated diagnostics are not included in published 0.8.1 packages. Native backends require the pinned 0.9 core (C ABI 2 for C-FFI); pure backends remain standalone.
+
+## Editing source text
+
+`Ktav.EditValue` replaces the value at a path **in the source text
+itself** — a lossless splice, not a parse→mutate→serialize round trip:
+
+```csharp
+var out1 = Ktav.EditValue(src, "targets.storagehost.address", new KtavString("10.0.0.9"));
+var out2 = Ktav.EditValueSegments(src, new[] { "targets", "storagehost", "address" }, new KtavString("10.0.0.9"));
+```
+
+| Member | Purpose |
+| --- | --- |
+| `Ktav.EditValue(string src, string path, KtavValue replacement) -> string` | Replace the value at a dotted textual path (`key1.key2.0.key4`; `\.` is a literal dot, `\\` a literal backslash). |
+| `Ktav.EditValueSegments(string src, IReadOnlyList<string> segments, KtavValue replacement) -> string` | Same, with pre-decoded literal segments (no extra unescaping). |
+
+Guarantees:
+
+- Only *replacement of an existing value* — no create/remove/rename.
+  A missing key, an out-of-bounds index, or descending through a scalar
+  is `EditNotFound`; a malformed path is `EditInvalidPath` (its
+  `Body` is the UTF-8 byte offset of the offender); when no lossless
+  patch exists — a noncontiguous dotted/reopen target, comments inside a
+  structurally replaced container — the call refuses with
+  `EditUnsupported`.
+- Bytes outside the edit are preserved exactly: comments, whitespace,
+  key spelling and order, BOM, CR/LF/CRLF, and the presence or absence
+  of a final newline. A no-op replacement returns the input
+  byte-identical, even for non-canonical spellings.
+- Inline containers are expanded minimally (four-space indent, source
+  line endings) only when a replacement would otherwise hurt
+  readability; untouched nested branches stay inline. Whole inline
+  containers stay inline; emptied block containers keep their braces.
+- After every patch the result is re-parsed and semantically verified,
+  so a silent corruption is never returned. Both backends (native and
+  pure) implement the same behaviour and are cross-checked in CI.
 
 ## Structured errors
 
@@ -276,6 +315,12 @@ search paths.
 All of the above applies to the **native** backend only. The pure
 managed backend ([Pure backend](#pure-backend)) never consults
 `$KTAV_LIB_PATH`, the `runtimes/` layout, the cache or the network.
+
+Before the first native call the managed layer checks
+`ktav_abi_version()` against the ABI shape this build requires
+(**2** since the 0.9 edit exports). An older binary is rejected with a
+clear version-mismatch error — it is never silently replaced by the
+pure backend.
 
 ## Runtime support
 
