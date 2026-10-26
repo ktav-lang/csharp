@@ -378,7 +378,125 @@ public static class Ktav
     /// </summary>
     public static string ExpectedNativeVersion => NativeLoader.LibVersion;
 
-    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource, EditValue, EditValueSegments }
+    /// <summary>Append a value under a new final object key in source text.</summary>
+    public static string InsertValue(string src, string path, KtavValue value) => InsertValue(src, path, value, DefaultBackend);
+    public static string InsertValue(string src, string path, KtavValue value, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (path == null) throw new ArgumentNullException(nameof(path));
+        if (value == null) throw new ArgumentNullException(nameof(value));
+        RequireNativeMutation(backend);
+        return MutationResult(CallNativeMutation(NativeOp.InsertValue, Encoding.UTF8.GetBytes(src), Encoding.UTF8.GetBytes(path), WireJson.Encode(value)));
+    }
+
+    public static string InsertValueSegments(string src, IReadOnlyList<string> segments, KtavValue value) => InsertValueSegments(src, segments, value, DefaultBackend);
+    public static string InsertValueSegments(string src, IReadOnlyList<string> segments, KtavValue value, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (segments == null) throw new ArgumentNullException(nameof(segments));
+        if (value == null) throw new ArgumentNullException(nameof(value));
+        RequireNativeMutation(backend);
+        return MutationResult(CallNativeMutation(NativeOp.InsertValueSegments, Encoding.UTF8.GetBytes(src), EncodeSegments(segments), WireJson.Encode(value)));
+    }
+
+    public static string RemoveValue(string src, string path) => RemoveValue(src, path, DefaultBackend);
+    public static string RemoveValue(string src, string path, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (path == null) throw new ArgumentNullException(nameof(path));
+        RequireNativeMutation(backend);
+        return MutationResult(CallNativeMutation(NativeOp.RemoveValue, Encoding.UTF8.GetBytes(src), Encoding.UTF8.GetBytes(path), null));
+    }
+
+    public static string RemoveValueSegments(string src, IReadOnlyList<string> segments) => RemoveValueSegments(src, segments, DefaultBackend);
+    public static string RemoveValueSegments(string src, IReadOnlyList<string> segments, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (segments == null) throw new ArgumentNullException(nameof(segments));
+        RequireNativeMutation(backend);
+        return MutationResult(CallNativeMutation(NativeOp.RemoveValueSegments, Encoding.UTF8.GetBytes(src), EncodeSegments(segments), null));
+    }
+
+    public static string RenameKey(string src, string path, string newKey) => RenameKey(src, path, newKey, DefaultBackend);
+    public static string RenameKey(string src, string path, string newKey, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (path == null) throw new ArgumentNullException(nameof(path));
+        if (newKey == null) throw new ArgumentNullException(nameof(newKey));
+        RequireNativeMutation(backend);
+        return MutationResult(CallNativeMutation(NativeOp.RenameKey, Encoding.UTF8.GetBytes(src), Encoding.UTF8.GetBytes(path), Encoding.UTF8.GetBytes(newKey)));
+    }
+
+    public static string RenameKeySegments(string src, IReadOnlyList<string> segments, string newKey) => RenameKeySegments(src, segments, newKey, DefaultBackend);
+    public static string RenameKeySegments(string src, IReadOnlyList<string> segments, string newKey, KtavBackend backend)
+    {
+        if (src == null) throw new ArgumentNullException(nameof(src));
+        if (segments == null) throw new ArgumentNullException(nameof(segments));
+        if (newKey == null) throw new ArgumentNullException(nameof(newKey));
+        RequireNativeMutation(backend);
+        return MutationResult(CallNativeMutation(NativeOp.RenameKeySegments, Encoding.UTF8.GetBytes(src), EncodeSegments(segments), Encoding.UTF8.GetBytes(newKey)));
+    }
+
+    private static void RequireNativeMutation(KtavBackend backend)
+    {
+        if (IsPure(backend)) throw new NotSupportedException("insert/remove/rename source mutations are not supported by the Pure backend");
+        NativeLoader.EnsureRegistered();
+    }
+
+    private static string MutationResult(byte[] bytes) => Encoding.UTF8.GetString(bytes);
+
+    private enum NativeOp { Loads, LoadsStrict, Dumps, DumpsForceStrings, EmitCanonical, Format, CanonicalFromSource, EditValue, EditValueSegments, InsertValue, InsertValueSegments, RemoveValue, RemoveValueSegments, RenameKey, RenameKeySegments }
+
+    private static byte[] CallNativeMutation(NativeOp op, byte[] src, byte[] path, byte[]? third)
+    {
+        EnsureAbiCompatible();
+        IntPtr a = IntPtr.Zero, b = IntPtr.Zero, c = IntPtr.Zero;
+        try
+        {
+            a = AllocInput(src); b = AllocInput(path); if (third != null) c = AllocInput(third);
+#if NET8_0_OR_GREATER
+            IntPtr outBuf, outErr; nuint outLen, outErrLen;
+            int rc = InvokeMutation(op, a, (nuint)src.Length, b, (nuint)path.Length, c, (nuint)(third?.Length ?? 0), out outBuf, out outLen, out outErr, out outErrLen);
+#else
+            IntPtr outBuf, outErr; UIntPtr outLen, outErrLen;
+            int rc = InvokeMutation(op, a, (UIntPtr)src.Length, b, (UIntPtr)path.Length, c, (UIntPtr)(third?.Length ?? 0), out outBuf, out outLen, out outErr, out outErrLen);
+#endif
+            if (rc != 0) { var error = CopyBytesAndFree(outErr, outErrLen); FreeIfPresent(outBuf, outLen); throw error.Length == 0 ? new KtavException("native call failed with code " + rc) : KtavException.FromEnvelope(error); }
+            FreeIfPresent(outErr, outErrLen); return CopyBytesAndFree(outBuf, outLen);
+        }
+        catch (EntryPointNotFoundException ex) { throw new KtavException("loaded ktav_cabi does not provide mutation symbol " + op + "; native binary predates object mutation ABI", ex); }
+        finally { if (a != IntPtr.Zero) Marshal.FreeHGlobal(a); if (b != IntPtr.Zero) Marshal.FreeHGlobal(b); if (c != IntPtr.Zero) Marshal.FreeHGlobal(c); }
+    }
+
+    private static IntPtr AllocInput(byte[] bytes) { var p = Marshal.AllocHGlobal(Math.Max(bytes.Length, 1)); if (bytes.Length > 0) Marshal.Copy(bytes, 0, p, bytes.Length); return p; }
+
+#if NET8_0_OR_GREATER
+    private static int InvokeMutation(NativeOp op, IntPtr s, nuint sl, IntPtr p, nuint pl, IntPtr t, nuint tl, out IntPtr ob, out nuint ol, out IntPtr er, out nuint el)
+    {
+        switch (op)
+        {
+            case NativeOp.InsertValue: return NativeMethods.ktav_insert_value(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+            case NativeOp.InsertValueSegments: return NativeMethods.ktav_insert_value_segments(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+            case NativeOp.RemoveValue: return NativeMethods.ktav_remove_value(s, sl, p, pl, out ob, out ol, out er, out el);
+            case NativeOp.RemoveValueSegments: return NativeMethods.ktav_remove_value_segments(s, sl, p, pl, out ob, out ol, out er, out el);
+            case NativeOp.RenameKey: return NativeMethods.ktav_rename_key(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+            default: return NativeMethods.ktav_rename_key_segments(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+        }
+    }
+#else
+    private static int InvokeMutation(NativeOp op, IntPtr s, UIntPtr sl, IntPtr p, UIntPtr pl, IntPtr t, UIntPtr tl, out IntPtr ob, out UIntPtr ol, out IntPtr er, out UIntPtr el)
+    {
+        switch (op)
+        {
+            case NativeOp.InsertValue: return NativeMethods.ktav_insert_value(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+            case NativeOp.InsertValueSegments: return NativeMethods.ktav_insert_value_segments(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+            case NativeOp.RemoveValue: return NativeMethods.ktav_remove_value(s, sl, p, pl, out ob, out ol, out er, out el);
+            case NativeOp.RemoveValueSegments: return NativeMethods.ktav_remove_value_segments(s, sl, p, pl, out ob, out ol, out er, out el);
+            case NativeOp.RenameKey: return NativeMethods.ktav_rename_key(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+            default: return NativeMethods.ktav_rename_key_segments(s, sl, p, pl, t, tl, out ob, out ol, out er, out el);
+        }
+    }
+#endif
 
     /// <summary>ABI shape gate: the loaded binary must report exactly
     /// <see cref="NativeLoader.ExpectedAbiVersion"/> (2 since 0.9). An old

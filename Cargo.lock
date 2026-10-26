@@ -71,7 +71,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "ktav"
 version = "0.9.0"
-source = "git+https://github.com/ktav-lang/rust?rev=447a00bd012e8d3f347c7e1eb59c3f0d9a78332f#447a00bd012e8d3f347c7e1eb59c3f0d9a78332f"
+source = "git+https://github.com/ktav-lang/rust?rev=861c64a8378242b87b66b7d7bfeb119996ce3643#861c64a8378242b87b66b7d7bfeb119996ce3643"
 dependencies = [
  "bumpalo",
  "compact_str",
