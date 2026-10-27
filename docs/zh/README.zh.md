@@ -159,27 +159,28 @@ var out2 = Ktav.EditValueSegments(src, new[] { "targets", "storagehost", "addres
 | 成员 | 用途 |
 | --- | --- |
 | `Ktav.EditValue(string src, string path, KtavValue replacement) -> string` | 按点分文本路径替换值（`key1.key2.0.key4`；`\.` 表示字面点号，`\\` 表示字面反斜杠）。 |
-| `Ktav.EditValueSegments(string src, IReadOnlyList<string> segments, KtavValue replacement) -> string` | 同上，但传入已解码的字面段（不再做额外反转义）。 |
+| `Ktav.EditValueSegments(string src, IReadOnlyList<string> segments, KtavValue replacement) -> string` | 同上，但传入已解码的字面段（不再额外反转义）。 |
 
 保证：
 
-- 只支持*替换已有值* —— 不做创建/删除/重命名。缺失键、数组越界或
-  穿过标量下钻是 `EditNotFound`；路径非法是 `EditInvalidPath`
-  （`Body` 是出问题的 UTF-8 字节偏移）；当不存在无损补丁时 ——
-  由 dotted/reopen 行拼成的 noncontiguous 目标、结构化替换容器内部的
-  注释 —— 调用会以 `EditUnsupported` 拒绝。
-- 编辑范围之外的字节原样保留：注释、空白、键的写法与顺序、BOM、
-  CR/LF/CRLF 以及末尾换行的有无。无变化（no-op）的替换会按字节原样
-  返回输入，即使写法不规范。
-- 只有当替换会损害可读性时才最小化地展开 inline 容器（4 空格缩进、
-  沿用源文件换行）；未触及的嵌套分支保持 inline。整体 inline 容器
-  在可读时保持 inline；被清空的块容器保留花括号。
-- 每次补丁后都会重新解析并做语义校验，因此不会悄悄返回损坏的文档。
-  两个后端（native 与 pure）行为一致，并在 CI 中交叉验证。
+
+- `Ktav.EditValue` 只替换已有值；它不会创建、删除或重命名值。缺失键、数组索引越界或穿过标量下钻会产生 `EditNotFound`；非法路径会产生 `EditInvalidPath`（`Body` 是问题位置的 UTF-8 字节偏移）。如果无法进行无损补丁，例如目标由 dotted/reopen 行组成而不连续，或结构替换的容器内含注释，`EditValue` 会返回 `EditUnsupported`。
+- 编辑范围之外的字节原样保留：注释、空白、键的写法与顺序、BOM、CR/LF/CRLF，以及是否存在末尾换行。即使写法不规范，无变化的替换也会按字节原样返回输入。
+- 只有当替换会损害可读性时才最小化展开 inline 容器（4 空格缩进，沿用源文件换行）；未触及的嵌套分支保持 inline。可读的整体 inline 容器保持 inline；被清空的块容器保留花括号。
+- 每次补丁后都会重新解析并进行语义验证，因此不会悄悄返回损坏的文档。
+
+Insert 只在已存在的 Object 父级下创建新的末尾键：不覆盖、不隐式创建中间容器，也不向 Array 插入。Remove 可删除叶值、子树或 Array 元素，但不会清除空祖先。Rename 接受单个字面 `newKey` 而非路径，保留成员顺序和值；名称不变时逐字节返回原文。键冲突返回 `EditAlreadyExists`，目标或父级不存在返回 `EditNotFound`。Native 和独立 Pure 遵循此契约，并在 CI 中分别验证。
+
+| 成员 | 用途 |
+| --- | --- |
+| `Ktav.InsertValue(string src, string path, KtavValue value) -> string` | 在对象末尾插入新键；文本路径使用相同的转义规则。此操作受支持；若无法无损拼接，Pure 可能返回 `EditUnsupported`。 |
+| `Ktav.InsertValueSegments(string src, IReadOnlyList<string> segments, KtavValue value) -> string` | 使用已解码的字面段执行相同的插入。此操作受支持；若无法无损拼接，Pure 可能返回 `EditUnsupported`。 |
+| `Ktav.RemoveValue` / `Ktav.RemoveValueSegments` | 删除值。Native 和 Pure 均支持；对于含注释或 noncontiguous dotted/reopen 目标，Pure 可能返回 `EditUnsupported`。 |
+| `Ktav.RenameKey` / `Ktav.RenameKeySegments` | 重命名对象键。Native 和 Pure 均支持；对于数组元素或 noncontiguous dotted/reopen 目标，Pure 可能返回 `EditUnsupported`。 |
 
 ### 源文本编辑示例
 
-以下示例适用于尚未发布的 0.9 API，而非已发布的 0.8.1 包。只能替换已有值：不会重命名键、创建缺失路径或删除条目。各代码片段相互独立；Rust 的 `?` 假定外层函数返回 `Result`。Go 示例仅针对固定且有效的输入使用 panic；应用程序应处理返回的错误。
+以下示例适用于尚未发布的 0.9 API，而非已发布的 0.8.1 包。这些示例展示已有值的替换；插入、删除及键重命名见源文本编辑 API 一节。各代码片段相互独立；Rust 的 `?` 假定外层函数返回 `Result`。Go 示例仅针对固定且有效的输入使用 panic；应用程序应处理返回的错误。
 
 绑定示例使用无需原生二进制的独立纯实现。原生入口接收相同的路径和值：Go 的 `ktav.EditValue`、Java 的 `Ktav.editValue`、C# 的 `KtavApi.EditValue(..., KtavBackend.Native)`、PHP 的 `Ktav::editValue`、JS 包的 native/FFI 导出及 Python 的 `ktav.edit_value`。C ABI 后端要求 ABI 2；PyO3/N-API/WASM 要求兼容的 0.9 准备核心。Bun/Deno FFI 返回 promise，需要 `await`；此处 pure/Node/WASM 示例为同步调用。
 

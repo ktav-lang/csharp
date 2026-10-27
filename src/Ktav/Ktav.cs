@@ -385,8 +385,10 @@ public static class Ktav
         if (src == null) throw new ArgumentNullException(nameof(src));
         if (path == null) throw new ArgumentNullException(nameof(path));
         if (value == null) throw new ArgumentNullException(nameof(value));
-        RequireNativeMutation(backend);
-        return MutationResult(CallNativeMutation(NativeOp.InsertValue, Encoding.UTF8.GetBytes(src), Encoding.UTF8.GetBytes(path), WireJson.Encode(value)));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureInsert.Apply(bytes, path, value);
+        NativeLoader.EnsureRegistered();
+        return MutationResult(CallNativeMutation(NativeOp.InsertValue, bytes, Encoding.UTF8.GetBytes(path), WireJson.Encode(value)));
     }
 
     public static string InsertValueSegments(string src, IReadOnlyList<string> segments, KtavValue value) => InsertValueSegments(src, segments, value, DefaultBackend);
@@ -395,8 +397,10 @@ public static class Ktav
         if (src == null) throw new ArgumentNullException(nameof(src));
         if (segments == null) throw new ArgumentNullException(nameof(segments));
         if (value == null) throw new ArgumentNullException(nameof(value));
-        RequireNativeMutation(backend);
-        return MutationResult(CallNativeMutation(NativeOp.InsertValueSegments, Encoding.UTF8.GetBytes(src), EncodeSegments(segments), WireJson.Encode(value)));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureInsert.ApplySegments(bytes, segments, value);
+        NativeLoader.EnsureRegistered();
+        return MutationResult(CallNativeMutation(NativeOp.InsertValueSegments, bytes, EncodeSegments(segments), WireJson.Encode(value)));
     }
 
     public static string RemoveValue(string src, string path) => RemoveValue(src, path, DefaultBackend);
@@ -404,8 +408,10 @@ public static class Ktav
     {
         if (src == null) throw new ArgumentNullException(nameof(src));
         if (path == null) throw new ArgumentNullException(nameof(path));
-        RequireNativeMutation(backend);
-        return MutationResult(CallNativeMutation(NativeOp.RemoveValue, Encoding.UTF8.GetBytes(src), Encoding.UTF8.GetBytes(path), null));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureRemove.Apply(bytes, path);
+        NativeLoader.EnsureRegistered();
+        return MutationResult(CallNativeMutation(NativeOp.RemoveValue, bytes, Encoding.UTF8.GetBytes(path), null));
     }
 
     public static string RemoveValueSegments(string src, IReadOnlyList<string> segments) => RemoveValueSegments(src, segments, DefaultBackend);
@@ -413,8 +419,10 @@ public static class Ktav
     {
         if (src == null) throw new ArgumentNullException(nameof(src));
         if (segments == null) throw new ArgumentNullException(nameof(segments));
-        RequireNativeMutation(backend);
-        return MutationResult(CallNativeMutation(NativeOp.RemoveValueSegments, Encoding.UTF8.GetBytes(src), EncodeSegments(segments), null));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureRemove.ApplySegments(bytes, segments);
+        NativeLoader.EnsureRegistered();
+        return MutationResult(CallNativeMutation(NativeOp.RemoveValueSegments, bytes, EncodeSegments(segments), null));
     }
 
     public static string RenameKey(string src, string path, string newKey) => RenameKey(src, path, newKey, DefaultBackend);
@@ -423,8 +431,10 @@ public static class Ktav
         if (src == null) throw new ArgumentNullException(nameof(src));
         if (path == null) throw new ArgumentNullException(nameof(path));
         if (newKey == null) throw new ArgumentNullException(nameof(newKey));
-        RequireNativeMutation(backend);
-        return MutationResult(CallNativeMutation(NativeOp.RenameKey, Encoding.UTF8.GetBytes(src), Encoding.UTF8.GetBytes(path), Encoding.UTF8.GetBytes(newKey)));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureRename.Apply(bytes, path, newKey);
+        NativeLoader.EnsureRegistered();
+        return MutationResult(CallNativeMutation(NativeOp.RenameKey, bytes, Encoding.UTF8.GetBytes(path), Encoding.UTF8.GetBytes(newKey)));
     }
 
     public static string RenameKeySegments(string src, IReadOnlyList<string> segments, string newKey) => RenameKeySegments(src, segments, newKey, DefaultBackend);
@@ -433,8 +443,10 @@ public static class Ktav
         if (src == null) throw new ArgumentNullException(nameof(src));
         if (segments == null) throw new ArgumentNullException(nameof(segments));
         if (newKey == null) throw new ArgumentNullException(nameof(newKey));
-        RequireNativeMutation(backend);
-        return MutationResult(CallNativeMutation(NativeOp.RenameKeySegments, Encoding.UTF8.GetBytes(src), EncodeSegments(segments), Encoding.UTF8.GetBytes(newKey)));
+        var bytes = Encoding.UTF8.GetBytes(src);
+        if (IsPure(backend)) return Pure.PureRename.ApplySegments(bytes, segments, newKey);
+        NativeLoader.EnsureRegistered();
+        return MutationResult(CallNativeMutation(NativeOp.RenameKeySegments, bytes, EncodeSegments(segments), Encoding.UTF8.GetBytes(newKey)));
     }
 
     private static void RequireNativeMutation(KtavBackend backend)

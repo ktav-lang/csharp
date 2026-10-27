@@ -11,7 +11,7 @@ rust-version = "1.71"
 
 [workspace.dependencies]
 # Подготовка 0.9: immutable core pin с source-edit и ABI 2; пакет ещё не опубликован.
-ktav = { git = "https://github.com/ktav-lang/rust", rev = "861c64a8378242b87b66b7d7bfeb119996ce3643" }
+ktav = { git = "https://github.com/ktav-lang/rust", rev = "8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = "2"

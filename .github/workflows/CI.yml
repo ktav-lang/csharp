@@ -68,11 +68,11 @@ jobs:
       # core, ABI 2). Cargo.lock must reference exactly that revision — a
       # drifted lockfile, a registry fallback, or a different rev must fail
       # the build instead of silently building against another core.
-      - name: Verify immutable ktav core pin (rev 861c64a8378242b87b66b7d7bfeb119996ce3643, 0.9.0)
+      - name: Verify immutable ktav core pin (rev 8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910, 0.9.0)
         shell: python
         run: |
           import re, sys
-          rev = "861c64a8378242b87b66b7d7bfeb119996ce3643"
+          rev = "8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910"
           expected_source = "git+https://github.com/ktav-lang/rust?rev=" + rev + "#" + rev
           blocks = [b for b in open("Cargo.lock", encoding="utf-8").read().split("[[package]]")
                     if re.search(r'^name = "ktav"$', b, re.M)]
@@ -150,11 +150,11 @@ jobs:
           dotnet-version: "8.0.x"
 
       # Same immutable core pin check as the release/test jobs.
-      - name: Verify immutable ktav core pin (rev 861c64a8378242b87b66b7d7bfeb119996ce3643, 0.9.0)
+      - name: Verify immutable ktav core pin (rev 8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910, 0.9.0)
         shell: python
         run: |
           import re, sys
-          rev = "861c64a8378242b87b66b7d7bfeb119996ce3643"
+          rev = "8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910"
           expected_source = "git+https://github.com/ktav-lang/rust?rev=" + rev + "#" + rev
           blocks = [b for b in open("Cargo.lock", encoding="utf-8").read().split("[[package]]")
                     if re.search(r'^name = "ktav"$', b, re.M)]
