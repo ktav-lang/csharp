@@ -221,7 +221,7 @@ internal static class PureRemove
     private static KtavValue RemoveSemantic(KtavValue value, IReadOnlyList<string> path, int depth)
     {
         string key = path[depth]; bool last = depth + 1 == path.Count;
-        if (value is KtavObject obj) { var entries = new List<KeyValuePair<string,KtavValue>>(); bool found = false; foreach (var e in obj.Entries) { if (!found && e.Key == key) { found = true; if (!last) entries.Add(new(e.Key, RemoveSemantic(e.Value,path,depth+1))); } else entries.Add(e); } if (!found) throw KtavException.EditNotFound(); return new KtavObject(entries); }
+        if (value is KtavObject obj) { var entries = new List<KeyValuePair<string,KtavValue>>(obj.Entries.Count); bool found = false; foreach (var e in obj.Entries) { if (!found && e.Key == key) { found = true; if (!last) entries.Add(new(e.Key, RemoveSemantic(e.Value,path,depth+1))); } else entries.Add(e); } if (!found) throw KtavException.EditNotFound(); return new KtavObject(entries); }
         if (value is KtavArray array) { int i = PureEdit.ParseIndex(key); if (i < 0 || i >= array.Items.Count) throw KtavException.EditNotFound(); var items = new List<KtavValue>(array.Items); if (last) items.RemoveAt(i); else items[i] = RemoveSemantic(items[i],path,depth+1); return new KtavArray(items); }
         throw KtavException.EditNotFound();
     }
