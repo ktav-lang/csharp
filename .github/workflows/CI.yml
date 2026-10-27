@@ -95,6 +95,51 @@ jobs:
       - name: dotnet test
         run: dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release --logger "console;verbosity=normal"
 
+  benchmark-mutations:
+    name: mutation benchmark / ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Run pure mutation benchmark (includes correctness oracles)
+        env:
+          KTAV_LIB_PATH: ${{ runner.temp }}/no-such-ktav-cabi.so
+        run: |
+          set -euo pipefail
+          test ! -e "$KTAV_LIB_PATH"
+          dotnet run -c Release --project benchmarks/Mutations -- --backend=pure | tee "$RUNNER_TEMP/mutations-pure.csv"
+
+      - name: Build native library
+        run: cargo build --release -p ktav-cabi
+
+      - name: Run native mutation benchmark (includes correctness oracles)
+        env:
+          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
+        run: |
+          set -euo pipefail
+          dotnet run -c Release --project benchmarks/Mutations -- --backend=native | tee "$RUNNER_TEMP/mutations-native.csv"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mutation-benchmark-pure-csv
+          path: ${{ runner.temp }}/mutations-pure.csv
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mutation-benchmark-native-csv
+          path: ${{ runner.temp }}/mutations-native.csv
+          retention-days: 7
+
   # Full suite against the PURE managed backend, WITHOUT any cargo /
   # native build step: no ktav_cabi exists in this job, so any accidental
   # native fallback fails instead of silently passing. KTAV_BACKEND=pure
