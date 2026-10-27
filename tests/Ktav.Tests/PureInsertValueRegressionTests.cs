@@ -39,6 +39,28 @@ public sealed class PureInsertValueRegressionTests
     }
 
     [Test]
+    public void NestedVerbatimLeadingSpacesSurviveInsert()
+    {
+        const string source = "a: {\n    x: 1\n}\n";
+        const string expected = "a: {\n    x: 1\n    value: {\n        text: ((\n    four\n      six\n        ))\n    }\n}\n";
+        var value = new KtavObject(new[]
+        {
+            new System.Collections.Generic.KeyValuePair<string, KtavValue>("text", S("    four\n      six"))
+        });
+        var textual = Ktav.InsertValue(source, "a.value", value, Pure);
+        var segmented = Ktav.InsertValueSegments(source, new[] { "a", "value" }, value, Pure);
+        Assert.That(textual, Is.EqualTo(expected));
+        Assert.That(segmented, Is.EqualTo(expected));
+        foreach (var output in new[] { textual, segmented })
+        {
+            var parent = (KtavObject)((KtavObject)Ktav.Loads(output, Pure)).TryGet("a")!;
+            var inserted = (KtavObject)parent.TryGet("value")!;
+            Assert.That(((KtavInteger)parent.TryGet("x")!).ToInt64(), Is.EqualTo(1L));
+            Assert.That(((KtavString)inserted.TryGet("text")!).Value, Is.EqualTo("    four\n      six"));
+        }
+    }
+
+    [Test]
     public void StructuralAndEscapedCommaParityIsPreserved()
     {
         var structural = Ktav.InsertValue("a: {x: 1,}\n", "a.y", S("two"), Pure);
@@ -243,7 +265,7 @@ public sealed class PureInsertValueRegressionTests
             const string source = "outer: {\n  keep: yes\n}\nother: untouched\n";
             var compound = (KtavObject)Ktav.Loads("inside: [1]\nchild: {leaf: ok}\n", Pure);
             var output = Insert(source, new[] { "outer", "added" }, compound);
-            Assert.That(output, Is.EqualTo("outer: {\n  keep: yes\n  added: {\n      inside: [1]\n      child: {leaf: ok}\n  }\n}\nother: untouched\n"));
+            Assert.That(output, Is.EqualTo("outer: {\n  keep: yes\n  added: {\n      inside: [\n          1\n      ]\n      child: {\n          leaf: ok\n      }\n  }\n}\nother: untouched\n"));
             var root = (KtavObject)Ktav.Loads(output, Pure);
             Assert.That(((KtavString)root.TryGet("other")!).Value, Is.EqualTo("untouched"));
             var outer = (KtavObject)root.TryGet("outer")!;
@@ -251,6 +273,39 @@ public sealed class PureInsertValueRegressionTests
             var added = (KtavObject)outer.TryGet("added")!;
             Assert.That(((KtavArray)added.TryGet("inside")!).Items.Count, Is.EqualTo(1));
             Assert.That(((KtavString)((KtavObject)added.TryGet("child")!).TryGet("leaf")!).Value, Is.EqualTo("ok"));
+        }
+
+        const string nestedSource = "root: {\n  keep: yes\n}\n";
+        var nestedValue = (KtavObject)Ktav.Loads("object: {number: 12}\narray: [{text:: 123}]\n", Pure);
+        var nestedOutput = Ktav.InsertValue(nestedSource, "root.inserted", nestedValue, Pure);
+        const string expected = "root: {\n  keep: yes\n  inserted: {\n      object: {\n          number: 12\n      }\n      array: [\n          {\n              text:: 123\n          }\n      ]\n  }\n}\n";
+        Assert.That(nestedOutput, Is.EqualTo(expected));
+
+        var inserted = (KtavObject)((KtavObject)Ktav.Loads(nestedOutput, Pure)).TryGet("root")!;
+        var insertedCompound = (KtavObject)inserted.TryGet("inserted")!;
+        Assert.That(((KtavInteger)((KtavObject)insertedCompound.TryGet("object")!).TryGet("number")!).ToInt64(), Is.EqualTo(12L));
+        var nestedArray = (KtavArray)insertedCompound.TryGet("array")!;
+        Assert.That(((KtavString)((KtavObject)nestedArray.Items[0]).TryGet("text")!).Value, Is.EqualTo("123"));
+
+        foreach (bool segments in new[] { false, true })
+        {
+            const string crlfSource = "root: {\r\n  keep: old\r\n}\r\n";
+            var crlf = segments
+                ? Ktav.InsertValueSegments(crlfSource, new[] { "root", "added" }, nestedValue, Pure)
+                : Ktav.InsertValue(crlfSource, "root.added", nestedValue, Pure);
+            Assert.That(crlf, Is.EqualTo("root: {\r\n  keep: old\r\n  added: {\r\n      object: {\r\n          number: 12\r\n      }\r\n      array: [\r\n          {\r\n              text:: 123\r\n          }\r\n      ]\r\n  }\r\n}\r\n"));
+            var crlfRoot = (KtavObject)Ktav.Loads(crlf, Pure);
+            var crlfInserted = (KtavObject)((KtavObject)crlfRoot.TryGet("root")!).TryGet("added")!;
+            Assert.That(((KtavString)((KtavObject)((KtavArray)crlfInserted.TryGet("array")!).Items[0]).TryGet("text")!).Value, Is.EqualTo("123"));
+
+            const string mixedSource = "root: {\r\n  keep: old\n}\r\n";
+            var mixed = segments
+                ? Ktav.InsertValueSegments(mixedSource, new[] { "root", "added" }, nestedValue, Pure)
+                : Ktav.InsertValue(mixedSource, "root.added", nestedValue, Pure);
+            Assert.That(mixed, Is.EqualTo("root: {\r\n  keep: old\n  added: {\r\n      object: {\r\n          number: 12\r\n      }\r\n      array: [\r\n          {\r\n              text:: 123\r\n          }\r\n      ]\r\n  }\r\n}\r\n"));
+            var mixedRoot = (KtavObject)Ktav.Loads(mixed, Pure);
+            var mixedInserted = (KtavObject)((KtavObject)mixedRoot.TryGet("root")!).TryGet("added")!;
+            Assert.That(((KtavString)((KtavObject)((KtavArray)mixedInserted.TryGet("array")!).Items[0]).TryGet("text")!).Value, Is.EqualTo("123"));
         }
 
         var nbsp = Ktav.InsertValue("a: {x: 1,}\n", "a.y", S("\u00A0suffix"), Pure);
