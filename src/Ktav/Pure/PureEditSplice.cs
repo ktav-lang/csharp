@@ -523,104 +523,19 @@ internal static class PureEditSplice
     /// <summary>Pretty render of a container without a root wrapper.</summary>
     private static string RenderCompoundBody(KtavValue v)
     {
-        var sb = new StringBuilder();
-        RenderCompoundItem(v, sb);
-        return sb.ToString();
-    }
-
-    private static void RenderCompoundItem(KtavValue v, StringBuilder outBuf)
-    {
-        // §5.9 pretty item render (mirror of the pretty writer's container
-        // emission at indent level 1, no root wrapper).
-        switch (v)
+        try
         {
-            case KtavObject o:
-                outBuf.Append('{');
-                for (int i = 0; i < o.Entries.Count; i++)
-                {
-                    if (i != 0) outBuf.Append('\n');
-                    outBuf.Append("    ");
-                    PureRender.PushEscapedKeySegment(o.Entries[i].Key, rootFirstKey: false, outBuf);
-                    outBuf.Append(':');
-                    AppendPrettyValue(o.Entries[i].Value, 1, outBuf);
-                }
-                outBuf.Append('}');
-                break;
-            case KtavArray a:
-                outBuf.Append('[');
-                for (int i = 0; i < a.Items.Count; i++)
-                {
-                    if (i != 0) outBuf.Append('\n');
-                    outBuf.Append("    ");
-                    AppendPrettyValue(a.Items[i], 1, outBuf);
-                }
-                outBuf.Append(']');
-                break;
-            default:
-                throw KtavException.EditUnsupported("internal: render_compound_body on a scalar");
+            string rendered = PureWriter.DumpsCompoundItem(v, 1, rootFirstItem: false);
+            return rendered.EndsWith("\n", StringComparison.Ordinal)
+                ? rendered.Substring(0, rendered.Length - 1)
+                : rendered;
+        }
+        catch (KtavException e)
+        {
+            throw KtavException.EditUnsupported("replacement is not representable: " + e.Message);
         }
     }
 
-    private static void AppendPrettyValue(KtavValue v, int level, StringBuilder outBuf)
-    {
-        switch (v)
-        {
-            case KtavObject o when o.Entries.Count == 0:
-                outBuf.Append(" {}");
-                break;
-            case KtavArray a when a.Items.Count == 0:
-                outBuf.Append(" []");
-                break;
-            case KtavObject:
-            case KtavArray:
-                outBuf.Append('\n');
-                PureRender.PushIndent(outBuf, level);
-                RenderCompoundItem(v, outBuf);
-                break;
-            case KtavString s when PureRender.StringNeedsMultiline(s.Value):
-            {
-                if (PureRender.ContainsCr(s.Value))
-                    throw PureRender.WriterError("CRByte", new List<string>());
-                int form = PureRender.ChooseMultilineForm(s.Value, preferStripped: true, new List<string>());
-                string opener = form == PureRender.MlVerbatim ? " ((" : " (";
-                string closer = form == PureRender.MlVerbatim ? "))" : ")";
-                outBuf.Append(opener);
-                int start = 0;
-                while (start <= s.Value.Length)
-                {
-                    int nl = s.Value.IndexOf('\n', start);
-                    outBuf.Append('\n');
-                    PureRender.PushIndent(outBuf, level + 1);
-                    if (nl < 0)
-                    {
-                        outBuf.Append(s.Value, start, s.Value.Length - start);
-                        break;
-                    }
-                    outBuf.Append(s.Value, start, nl - start);
-                    start = nl + 1;
-                }
-                outBuf.Append('\n');
-                PureRender.PushIndent(outBuf, level);
-                outBuf.Append(closer);
-                break;
-            }
-            case KtavString s:
-                outBuf.Append(' ').Append(s.Value);
-                break;
-            case KtavNull:
-                outBuf.Append(" null");
-                break;
-            case KtavBool b:
-                outBuf.Append(b.Value ? " true" : " false");
-                break;
-            case KtavInteger i:
-                outBuf.Append(' ').Append(i.Text);
-                break;
-            case KtavFloat f:
-                outBuf.Append(' ').Append(f.Text);
-                break;
-        }
-    }
 
     /// <summary>Re-indent a pretty render under the target's line. Lines
     /// inside verbatim blocks of the render are not re-indented. Any
@@ -635,13 +550,16 @@ internal static class PureEditSplice
         {
             int nl = doc.IndexOf('\n', start);
             string line = nl < 0 ? doc.Substring(start) : doc.Substring(start, nl - start);
-            if (line.StartsWith("    ", StringComparison.Ordinal)) line = line.Substring(4);
+            if (!inVerbatim || TrimSpTab(line) == "))")
+            {
+                if (line.StartsWith("    ", StringComparison.Ordinal)) line = line.Substring(4);
+            }
             bool verbatimOpen = line.EndsWith("((", StringComparison.Ordinal);
             bool verbatimClose = TrimSpTab(line) == "))";
             if (!first)
             {
                 outBuf.Append(eol);
-                bool skipPrefix = inVerbatim || line.Length == 0;
+                bool skipPrefix = (inVerbatim && !verbatimClose) || line.Length == 0;
                 if (!skipPrefix) outBuf.Append(indent);
             }
             first = false;

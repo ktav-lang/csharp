@@ -167,28 +167,23 @@ var out2 = Ktav.EditValueSegments(src, new[] { "targets", "storagehost", "addres
 
 Guarantees:
 
-- Only *replacement of an existing value* — no create/remove/rename.
-  A missing key, an out-of-bounds index, or descending through a scalar
-  is `EditNotFound`; a malformed path is `EditInvalidPath` (its
-  `Body` is the UTF-8 byte offset of the offender); when no lossless
-  patch exists — a noncontiguous dotted/reopen target, comments inside a
-  structurally replaced container — the call refuses with
-  `EditUnsupported`.
-- Bytes outside the edit are preserved exactly: comments, whitespace,
-  key spelling and order, BOM, CR/LF/CRLF, and the presence or absence
-  of a final newline. A no-op replacement returns the input
-  byte-identical, even for non-canonical spellings.
-- Inline containers are expanded minimally (four-space indent, source
-  line endings) only when a replacement would otherwise hurt
-  readability; untouched nested branches stay inline. Whole inline
-  containers stay inline when readable; emptied block containers keep their braces.
-- After every patch the result is re-parsed and semantically verified,
-  so a silent corruption is never returned. Both backends (native and
-  pure) implement the same behaviour and are cross-checked in CI.
+- `Ktav.EditValue` replaces an existing value only; it does not create, remove, or rename values. Missing keys, out-of-range array indices, or descending through a scalar produce `EditNotFound`; malformed paths produce `EditInvalidPath` (`Body` is the offender's UTF-8 byte offset). `EditValue` returns `EditUnsupported` when no lossless patch is possible, such as for a noncontiguous dotted/reopen target or comments inside a structurally replaced container.
+- Bytes outside an edit are preserved exactly: comments, whitespace, key spelling and order, BOM, CR/LF/CRLF, and whether a final newline is present. A no-op replacement returns the input byte-identically, even with non-canonical spelling.
+- Inline containers are expanded minimally (four-space indentation, source line endings) only when a replacement would otherwise hurt readability; untouched nested branches stay inline. Readable whole inline containers stay inline; emptied block containers keep their braces.
+- After each patch the result is reparsed and semantically verified, so corruption is not silently returned.
+
+Insert creates only a new final Object key under an existing Object parent: no overwriting, implicit intermediate containers or Array insertion. Remove accepts a leaf, subtree or Array element and never prunes empty ancestors. Rename takes one literal `newKey`, not a path, preserves member order and value, and returns the input byte-identically for the same key. Collisions return `EditAlreadyExists`; missing targets or parents return `EditNotFound`. Native and standalone Pure follow this contract and are checked independently in CI.
+
+| Member | Purpose |
+| --- | --- |
+| `Ktav.InsertValue(string src, string path, KtavValue value) -> string` | Insert a new final object key; textual paths use the same escaping rules. Supported; Pure may return `EditUnsupported` when it cannot make a lossless splice. |
+| `Ktav.InsertValueSegments(string src, IReadOnlyList<string> segments, KtavValue value) -> string` | Same insertion using pre-decoded literal segments. Supported; Pure may return `EditUnsupported` when it cannot make a lossless splice. |
+| `Ktav.RemoveValue` / `Ktav.RemoveValueSegments` | Remove a value. Supported by Native and Pure; Pure may return `EditUnsupported` for targets with comments or noncontiguous dotted/reopen targets. |
+| `Ktav.RenameKey` / `Ktav.RenameKeySegments` | Rename an object key. Supported by Native and Pure; Pure may return `EditUnsupported` for array elements or noncontiguous dotted/reopen targets. |
 
 ### Source-edit cookbook
 
-These examples describe the unreleased 0.9 API, not the published 0.8.1 package. They replace existing values only: keys are not renamed, missing paths are not created, and entries are not removed. Each snippet is independent; Rust `?` assumes an enclosing `Result`-returning function. Go examples panic only for these fixed, known-valid inputs; applications should handle the returned error.
+These examples describe the unreleased 0.9 API, not the published 0.8.1 package. They illustrate replacement of existing values; insertion, removal and key renaming are documented in the source-edit API section. Each snippet is independent; Rust `?` assumes an enclosing `Result`-returning function. Go examples panic only for these fixed, known-valid inputs; applications should handle the returned error.
 
 The binding examples use the standalone pure backend, without a native binary. Native entry points accept the same paths and values: `ktav.EditValue` (Go), `Ktav.editValue` (Java), `KtavApi.EditValue(..., KtavBackend.Native)` (C#), `Ktav::editValue` (PHP), the package's native/FFI exports (JS), and `ktav.edit_value` (Python). C-ABI backends require ABI 2; PyO3/N-API/WASM require the matching preparing-0.9 core. Bun/Deno FFI calls return promises: use `await`; pure/Node/WASM examples shown here are synchronous.
 

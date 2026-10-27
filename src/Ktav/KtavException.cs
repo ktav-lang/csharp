@@ -238,6 +238,10 @@ public sealed class KtavException : Exception
         new KtavException("edit path does not address an existing value",
             "EditNotFound", null, null, null, null, null, null, null, null);
 
+    internal static KtavException EditAlreadyExists() =>
+        new KtavException("insert path already exists", "EditAlreadyExists",
+            null, null, null, null, null, null, null, null);
+
     internal static KtavException EditUnsupported(string reason) =>
         new KtavException("no lossless source edit: " + reason,
             "EditUnsupported", null, null, null, null, null, reason, null, null);

@@ -88,6 +88,25 @@ internal static partial class NativeMethods
         IntPtr replacement, nuint replacementLen,
         out IntPtr outBuf, out nuint outLen,
         out IntPtr outErr, out nuint outErrLen);
+
+    [LibraryImport(LibName)]
+    public static partial int ktav_insert_value(
+        IntPtr src, nuint srcLen,
+        IntPtr path, nuint pathLen,
+        IntPtr replacement, nuint replacementLen,
+        out IntPtr outBuf, out nuint outLen,
+        out IntPtr outErr, out nuint outErrLen);
+
+    [LibraryImport(LibName)]
+    public static partial int ktav_insert_value_segments(IntPtr src, nuint srcLen, IntPtr path, nuint pathLen, IntPtr replacement, nuint replacementLen, out IntPtr outBuf, out nuint outLen, out IntPtr outErr, out nuint outErrLen);
+    [LibraryImport(LibName)]
+    public static partial int ktav_remove_value(IntPtr src, nuint srcLen, IntPtr path, nuint pathLen, out IntPtr outBuf, out nuint outLen, out IntPtr outErr, out nuint outErrLen);
+    [LibraryImport(LibName)]
+    public static partial int ktav_remove_value_segments(IntPtr src, nuint srcLen, IntPtr path, nuint pathLen, out IntPtr outBuf, out nuint outLen, out IntPtr outErr, out nuint outErrLen);
+    [LibraryImport(LibName)]
+    public static partial int ktav_rename_key(IntPtr src, nuint srcLen, IntPtr path, nuint pathLen, IntPtr newKey, nuint newKeyLen, out IntPtr outBuf, out nuint outLen, out IntPtr outErr, out nuint outErrLen);
+    [LibraryImport(LibName)]
+    public static partial int ktav_rename_key_segments(IntPtr src, nuint srcLen, IntPtr path, nuint pathLen, IntPtr newKey, nuint newKeyLen, out IntPtr outBuf, out nuint outLen, out IntPtr outErr, out nuint outErrLen);
 #else
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int ktav_loads(
@@ -157,5 +176,24 @@ internal static partial class NativeMethods
         IntPtr replacement, UIntPtr replacementLen,
         out IntPtr outBuf, out UIntPtr outLen,
         out IntPtr outErr, out UIntPtr outErrLen);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_insert_value(
+        IntPtr src, UIntPtr srcLen,
+        IntPtr path, UIntPtr pathLen,
+        IntPtr replacement, UIntPtr replacementLen,
+        out IntPtr outBuf, out UIntPtr outLen,
+        out IntPtr outErr, out UIntPtr outErrLen);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_insert_value_segments(IntPtr src, UIntPtr srcLen, IntPtr path, UIntPtr pathLen, IntPtr replacement, UIntPtr replacementLen, out IntPtr outBuf, out UIntPtr outLen, out IntPtr outErr, out UIntPtr outErrLen);
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_remove_value(IntPtr src, UIntPtr srcLen, IntPtr path, UIntPtr pathLen, out IntPtr outBuf, out UIntPtr outLen, out IntPtr outErr, out UIntPtr outErrLen);
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_remove_value_segments(IntPtr src, UIntPtr srcLen, IntPtr path, UIntPtr pathLen, out IntPtr outBuf, out UIntPtr outLen, out IntPtr outErr, out UIntPtr outErrLen);
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_rename_key(IntPtr src, UIntPtr srcLen, IntPtr path, UIntPtr pathLen, IntPtr newKey, UIntPtr newKeyLen, out IntPtr outBuf, out UIntPtr outLen, out IntPtr outErr, out UIntPtr outErrLen);
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern int ktav_rename_key_segments(IntPtr src, UIntPtr srcLen, IntPtr path, UIntPtr pathLen, IntPtr newKey, UIntPtr newKeyLen, out IntPtr outBuf, out UIntPtr outLen, out IntPtr outErr, out UIntPtr outErrLen);
 #endif
 }

@@ -13,7 +13,7 @@ format itself — see
 
 ## Unreleased — 0.9 preparation
 
-- Add native and standalone pure editing by textual path or literal segments: source splicing, preserved container forms, minimal readability transitions, comment protection, byte-identical no-op and semantic verification.
+- Add insertion of final object keys, value removal, and object-key renaming to the native and standalone pure source-edit APIs, alongside value replacement; operations fail closed when no safe lossless splice is available.
 - Apply 0.9 source diagnostics and the pinned 412-case conformance corpus, including 72 diagnostic fixtures with raw UTF-8 byte locations and EOF opener spans.
 - Native uses the immutable preparing-0.9 core and C ABI 2; pure remains independent of native binaries. Package versions are unchanged; this functionality is not published in 0.8.1.
 

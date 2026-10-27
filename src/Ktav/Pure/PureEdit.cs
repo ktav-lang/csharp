@@ -68,7 +68,7 @@ internal static class PureEdit
 
         Node root;
         bool rootExplicit;
-        var builder = new Builder(src);
+        var builder = new Builder(src, insertionMode: false);
         (root, rootExplicit) = builder.Build();
 
         var (node, ctx) = Descend(root, segments, rootExplicit);
@@ -613,6 +613,10 @@ internal static class PureEdit
     // Positional tree builder (tree.rs Builder)
     // ------------------------------------------------------------------
 
+    internal static (Node, bool) BuildPosition(byte[] src) => new Builder(src, insertionMode: true).Build();
+    internal static (Node, bool) BuildPositionForEdit(byte[] src) => new Builder(src, insertionMode: false).Build();
+    internal static (Node, bool) BuildPositionForRemove(byte[] src) => new Builder(src, insertionMode: false, rootRangeMode: true).Build();
+
     private sealed class Builder
     {
         private readonly byte[] _src;
@@ -623,8 +627,13 @@ internal static class PureEdit
         private bool _rootConsumed;
         private Node? _rootInline;
         private bool _rootIsExplicit;
+        private Slot? _rootSlot;
+        private Node? _rootExplicitNode;
+        private readonly bool _insertionMode;
+        private readonly bool _rootRangeMode;
 
-        internal Builder(byte[] src) { _src = src; }
+        internal Builder(byte[] src, bool insertionMode, bool rootRangeMode = false)
+        { _src = src; _insertionMode = insertionMode; _rootRangeMode = rootRangeMode; }
 
         internal (Node, bool) Build()
         {
@@ -684,12 +693,14 @@ internal static class PureEdit
                     {
                         _rootConsumed = true;
                         _rootInline = PositionInlineTop(ts0, ts1, lineNum, isObject: true);
+                        if (_insertionMode || _rootRangeMode) _rootInline.Slot = Slot.Pair(ts0, ts0, ts1);
                         return;
                     }
                     if (ts1 - ts0 >= 2 && _src[ts0] == (byte)'[' && _src[ts1 - 1] == (byte)']')
                     {
                         _rootConsumed = true;
                         _rootInline = PositionInlineTop(ts0, ts1, lineNum, isObject: false);
+                        if (_insertionMode || _rootRangeMode) _rootInline.Slot = Slot.Item(ts0, ts0, ts1);
                         return;
                     }
                     if (Eq(ts0, ts1, "{"))
@@ -1158,6 +1169,9 @@ internal static class PureEdit
             if (_stack.Count == 1 && _rootIsExplicit)
             {
                 _rootConsumed = true;
+                _rootSlot = Slot.Block(_stack[0].RangeStart, ts1);
+                if (_insertionMode)
+                    _rootExplicitNode = new Node { IsObject = _stack[0].IsObject, Table = _stack[0].Table, Items = _stack[0].Items, Slot = _rootSlot, Inline = false };
                 return;
             }
             if (_stack.Count <= 1)
@@ -1201,7 +1215,10 @@ internal static class PureEdit
                 throw PureError.UnclosedCompound("object", 0, eofOffset);
             if (_rootIsExplicit && !_rootConsumed)
                 throw PureError.UnclosedCompound("object", 0, eofOffset);
+            if (_insertionMode && _rootExplicitNode != null) return _rootExplicitNode;
             if (_rootInline != null) return _rootInline;
+            if (_insertionMode && _rootIsExplicit && _rootSlot.HasValue && _stack.Count == 0)
+                return new Node { IsObject = true, Table = new EditTable(), Slot = _rootSlot, Inline = false };
             if (_stack.Count == 1)
             {
                 var f = _stack[0];

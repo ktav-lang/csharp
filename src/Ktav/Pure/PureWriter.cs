@@ -37,6 +37,17 @@ internal static class PureWriter
         return w.Out.ToString();
     }
 
+    /// <summary>Pretty render of one compound as an array item at indent 1.</summary>
+    internal static string DumpsCompoundItem(KtavValue value, int indent, bool rootFirstItem)
+    {
+        if (value is not (KtavObject or KtavArray))
+            throw KtavException.WriterError("ScalarRoot", Array.Empty<string>());
+        var w = new Walker(EstimateSize(value));
+        w.CompoundItem(value, indent, rootFirstItem);
+        w.Run();
+        return w.Out.ToString();
+    }
+
     private static void PrecheckRoot(KtavValue value)
     {
         if (value is not (KtavObject or KtavArray))
@@ -75,6 +86,11 @@ internal static class PureWriter
                     }
                     break;
             }
+        }
+
+        public void CompoundItem(KtavValue value, int indent, bool rootFirstItem)
+        {
+            EmitArrayItem(value, indent, rootFirstItem);
         }
 
         public void Run()

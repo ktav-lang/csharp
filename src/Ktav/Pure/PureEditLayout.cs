@@ -14,6 +14,33 @@ namespace Ktav.Pure;
 
 internal static class PureEditLayout
 {
+    internal static byte[] AdjustInsertion(byte[] source, byte[] candidate, PureEdit.Node root,
+        IReadOnlyList<string> parentPath, KtavValue replacement, int from, int to, int inserted)
+    {
+        var owner = InlineOwner(source, root, parentPath, from);
+        if (owner == null) return candidate;
+        var (start, end) = owner.Value;
+        if (from < start) return candidate;
+        int newEnd = end - (to - from) + inserted;
+        if (newEnd < start || newEnd > candidate.Length || !IsCompound(candidate, start, newEnd)) return candidate;
+        var (oldLo, oldHi) = PureEdit.LineBounds(source, from);
+        int limit = Math.Max(PureEdit.CountScalars(source, oldLo, oldHi), 100);
+        bool force = PureInsertLayout.RequiresBlock(replacement);
+        var (newLo, newHi) = PureEdit.LineBounds(candidate, from);
+        if (!force && PureEdit.CountScalars(candidate, newLo, newHi) <= limit) return candidate;
+        string indent = PureEdit.LineIndent(source, start);
+        string eol = PureEdit.DetectEol(source, end);
+        var expanded = Expand(Slice(candidate, start, newEnd), indent, eol, limit,
+            (from - start, from - start + inserted), force, 0);
+        if (expanded == null) return candidate;
+        var bytes = Encoding.UTF8.GetBytes(expanded);
+        var result = new byte[start + bytes.Length + candidate.Length - newEnd];
+        Array.Copy(candidate, 0, result, 0, start);
+        Array.Copy(bytes, 0, result, start, bytes.Length);
+        Array.Copy(candidate, newEnd, result, start + bytes.Length, candidate.Length - newEnd);
+        return result;
+    }
+
     internal static byte[] Adjust(byte[] source, byte[] candidate, PureEdit.Node root,
         IReadOnlyList<string> path, KtavValue replacement, PureEdit.Node targetNode, PureEdit.Ctx ctx)
     {
@@ -76,6 +103,7 @@ internal static class PureEditLayout
         var node = root;
         if (root.Inline)
         {
+            if (root.Slot.HasValue) return SlotBody(root.Slot.Value);
             var (lineLo, lineHi) = PureEdit.LineBounds(source, pos);
             var (tlo, thi) = PureUtf8.Trim(source, lineLo, lineHi);
             if (tlo < thi && source[tlo] == 0xEF && tlo + 3 <= thi) tlo += 3; // strip BOM
