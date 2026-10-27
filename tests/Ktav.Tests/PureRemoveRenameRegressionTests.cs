@@ -358,6 +358,86 @@ public sealed class PureRemoveRenameRegressionTests
         Assert.That(((KtavInteger)first.TryGet("keep")!).ToInt64(), Is.EqualTo(2L));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RemoveInlineObjectFirstMiddleAndLastPreservesOrderedSiblingTypes(bool segments)
+    {
+        const string source = "root: { first: 1, middle: two, last: true }\ntail: null\n";
+        foreach (var (key, expected) in new[]
+        {
+            ("first", "root: { middle: two, last: true }\ntail: null\n"),
+            ("middle", "root: { first: 1, last: true }\ntail: null\n"),
+            ("last", "root: { first: 1, middle: two }\ntail: null\n")
+        })
+        {
+            var output = segments
+                ? Ktav.RemoveValueSegments(source, new[] { "root", key }, Pure)
+                : Ktav.RemoveValue(source, "root." + key, Pure);
+            Assert.That(output, Is.EqualTo(expected));
+
+            var root = (KtavObject)Ktav.Loads(output, Pure);
+            Assert.That(root.Entries.Count, Is.EqualTo(2));
+            Assert.That(root.Entries[0].Key, Is.EqualTo("root"));
+            Assert.That(root.Entries[1].Key, Is.EqualTo("tail"));
+            var obj = (KtavObject)root.TryGet("root")!;
+            var remaining = key switch
+            {
+                "first" => new (string, KtavValue)[] { ("middle", new KtavString("two")), ("last", KtavBool.True) },
+                "middle" => new (string, KtavValue)[] { ("first", KtavInteger.Of(1)), ("last", KtavBool.True) },
+                _ => new (string, KtavValue)[] { ("first", KtavInteger.Of(1)), ("middle", new KtavString("two")) }
+            };
+            Assert.That(obj.Entries.Count, Is.EqualTo(2));
+            for (int i = 0; i < remaining.Length; i++)
+            {
+                Assert.That(obj.Entries[i].Key, Is.EqualTo(remaining[i].Item1));
+                Assert.That(obj.Entries[i].Value, Is.EqualTo(remaining[i].Item2));
+            }
+            Assert.That(root.TryGet("tail"), Is.EqualTo(KtavNull.Instance));
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RemoveNestedInlineObjectPreservesOrderedSiblingTypes(bool segments)
+    {
+        const string source = "outer: { inner: { first: 1, remove: false, last: kept }, tail: 2 }\n";
+        const string expected = "outer: { inner: { first: 1, last: kept }, tail: 2 }\n";
+        var output = segments
+            ? Ktav.RemoveValueSegments(source, new[] { "outer", "inner", "remove" }, Pure)
+            : Ktav.RemoveValue(source, "outer.inner.remove", Pure);
+        Assert.That(output, Is.EqualTo(expected));
+
+        var root = (KtavObject)Ktav.Loads(output, Pure);
+        Assert.That(root.Entries.Count, Is.EqualTo(1));
+        Assert.That(root.Entries[0].Key, Is.EqualTo("outer"));
+        var outer = (KtavObject)root.TryGet("outer")!;
+        Assert.That(outer.Entries.Count, Is.EqualTo(2));
+        Assert.That(outer.Entries[0].Key, Is.EqualTo("inner"));
+        Assert.That(outer.Entries[0].Value, Is.TypeOf<KtavObject>());
+        Assert.That(outer.Entries[1].Key, Is.EqualTo("tail"));
+        Assert.That(outer.Entries[1].Value, Is.EqualTo(KtavInteger.Of(2)));
+        var inner = (KtavObject)outer.TryGet("inner")!;
+        Assert.That(inner.Entries.Count, Is.EqualTo(2));
+        Assert.That(inner.Entries[0].Key, Is.EqualTo("first"));
+        Assert.That(inner.Entries[0].Value, Is.EqualTo(KtavInteger.Of(1)));
+        Assert.That(inner.Entries[1].Key, Is.EqualTo("last"));
+        Assert.That(inner.Entries[1].Value, Is.EqualTo(new KtavString("kept")));
+        Assert.That(inner.TryGet("remove"), Is.Null);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RemoveMissingObjectMemberReportsNotFound(bool segments)
+    {
+        const string source = "root: { present: 1 }\n";
+        var error = Assert.Throws<KtavException>(() =>
+        {
+            if (segments) Ktav.RemoveValueSegments(source, new[] { "root", "missing" }, Pure);
+            else Ktav.RemoveValue(source, "root.missing", Pure);
+        });
+        Assert.That(error!.Error, Is.EqualTo("EditNotFound"));
+    }
+
     [Test]
     public void RemoveContainerWithCommentsIsUnsupported()
     {

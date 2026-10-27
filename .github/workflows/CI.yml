@@ -68,11 +68,11 @@ jobs:
       # core, ABI 2). Cargo.lock must reference exactly that revision — a
       # drifted lockfile, a registry fallback, or a different rev must fail
       # the build instead of silently building against another core.
-      - name: Verify immutable ktav core pin (rev 8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910, 0.9.0)
+      - name: Verify immutable ktav core pin (rev 1f7c717597cceecb8da84aaf8f47e62945b1db98, 0.9.0)
         shell: python
         run: |
           import re, sys
-          rev = "8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910"
+          rev = "1f7c717597cceecb8da84aaf8f47e62945b1db98"
           expected_source = "git+https://github.com/ktav-lang/rust?rev=" + rev + "#" + rev
           blocks = [b for b in open("Cargo.lock", encoding="utf-8").read().split("[[package]]")
                     if re.search(r'^name = "ktav"$', b, re.M)]
@@ -94,6 +94,87 @@ jobs:
 
       - name: dotnet test
         run: dotnet test tests/Ktav.Tests/Ktav.Tests.csproj -c Release --logger "console;verbosity=normal"
+
+  benchmark-mutations:
+    name: mutation benchmark / ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Prepare baseline source
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/benchmark-baseline" "$RUNNER_TEMP/benchmark-results"
+          BASELINE_SHA=$(git rev-parse 5001015^{commit})
+          git archive "$BASELINE_SHA" | tar -x -C "$RUNNER_TEMP/benchmark-baseline"
+          cp benchmarks/Mutations/Program.cs "$RUNNER_TEMP/benchmark-baseline/benchmarks/Mutations/Program.cs"
+          cp benchmarks/Mutations/Mutations.csproj "$RUNNER_TEMP/benchmark-baseline/benchmarks/Mutations/Mutations.csproj"
+          printf '%s\n' "$BASELINE_SHA" > "$RUNNER_TEMP/benchmark-results/baseline-commit.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/benchmark-results/candidate-commit.txt"
+
+      - name: Build pinned native library once
+        run: cargo build --release -p ktav-cabi
+
+      - name: Run baseline and candidate in alternating order
+        env:
+          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
+          BASELINE: ${{ runner.temp }}/benchmark-baseline
+          RESULTS: ${{ runner.temp }}/benchmark-results
+          BUILDS: ${{ runner.temp }}/benchmark-builds
+        run: |
+          set -euo pipefail
+          test -f "$KTAV_LIB_PATH"
+          mkdir -p "$BUILDS"
+          dotnet build "$BASELINE/benchmarks/Mutations/Mutations.csproj" -c Release -o "$BUILDS/baseline/native-build"
+          dotnet build benchmarks/Mutations/Mutations.csproj -c Release -o "$BUILDS/candidate/native-build"
+          env KTAV_LIB_PATH="$RUNNER_TEMP/no-such-ktav-cabi.so" dotnet build "$BASELINE/benchmarks/Mutations/Mutations.csproj" -c Release -o "$BUILDS/baseline/pure-build"
+          env KTAV_LIB_PATH="$RUNNER_TEMP/no-such-ktav-cabi.so" dotnet build benchmarks/Mutations/Mutations.csproj -c Release -o "$BUILDS/candidate/pure-build"
+          printf 'commit,backend,round,case,measured_backend,iterations,total_ms,ns_per_op,source_bytes\n' > "$RESULTS/results.csv"
+          printf 'round,first,second\n' > "$RESULTS/run-order.csv"
+          sha256sum "$KTAV_LIB_PATH" > "$RESULTS/native-library-sha256.txt"
+          for round in 1 2 3 4 5 6; do
+            if (( round % 2 )); then order='baseline candidate'; else order='candidate baseline'; fi
+            printf '%s,%s\n' "$round" "${order// /,}" >> "$RESULTS/run-order.csv"
+            for backend in pure native; do
+              for tree in $order; do
+                if [[ "$backend" == pure ]]; then
+                  lib="$RUNNER_TEMP/no-such-ktav-cabi.so"
+                  test ! -e "$lib"
+                else
+                  lib="$KTAV_LIB_PATH"
+                fi
+                if [[ "$tree" == baseline ]]; then
+                  commit=$(cat "$RESULTS/baseline-commit.txt")
+                else
+                  commit=$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)
+                fi
+                env KTAV_LIB_PATH="$lib" dotnet "$BUILDS/$tree/$backend-build/Mutations.dll" --backend="$backend" > "$RESULTS/$tree-$backend-$round.csv"
+                tail -n +2 "$RESULTS/$tree-$backend-$round.csv" | awk -F, -v c="$commit" -v b="$backend" -v r="$round" 'BEGIN{OFS=","}{print c,b,r,$0}' >> "$RESULTS/results.csv"
+              done
+            done
+          done
+          git rev-parse HEAD > "$RESULTS/candidate-commit.txt"
+          git rev-parse 5001015^{commit} > "$RESULTS/baseline-commit.txt"
+          sha256sum "$RESULTS"/*.csv > "$RESULTS/sha256.txt"
+          uname -a > "$RESULTS/runner.txt"
+          dotnet --info > "$RESULTS/dotnet-info.txt"
+          rustc --version > "$RESULTS/rust-version.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mutation-benchmark-baseline-candidate
+          path: ${{ runner.temp }}/benchmark-results/
+          retention-days: 7
 
   # Full suite against the PURE managed backend, WITHOUT any cargo /
   # native build step: no ktav_cabi exists in this job, so any accidental
@@ -150,11 +231,11 @@ jobs:
           dotnet-version: "8.0.x"
 
       # Same immutable core pin check as the release/test jobs.
-      - name: Verify immutable ktav core pin (rev 8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910, 0.9.0)
+      - name: Verify immutable ktav core pin (rev 1f7c717597cceecb8da84aaf8f47e62945b1db98, 0.9.0)
         shell: python
         run: |
           import re, sys
-          rev = "8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910"
+          rev = "1f7c717597cceecb8da84aaf8f47e62945b1db98"
           expected_source = "git+https://github.com/ktav-lang/rust?rev=" + rev + "#" + rev
           blocks = [b for b in open("Cargo.lock", encoding="utf-8").read().split("[[package]]")
                     if re.search(r'^name = "ktav"$', b, re.M)]
