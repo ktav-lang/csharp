@@ -112,7 +112,7 @@ internal static class PureRename
         }
         else return start;
         lo = PureUtf8.TrimStart(src, lo, hi);
-        hi = PureUtf8.TrimEnd(src, lo, hi);
+        hi = PureUtf8.Trim(src, lo, hi).Item2;
         if (lo >= hi || src[lo] != (byte)'{') return start;
         int found = PureInline.ScanInlineCloserWithBounds(src, lo, hi, '{', '}', 1, lo, hi,
             out var pairs, out _);
