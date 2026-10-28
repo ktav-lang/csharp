@@ -79,3 +79,26 @@ jobs:
               urls = [element.text for element in root.iter() if element.tag.rsplit('}', 1)[-1] == 'licenseUrl']
               assert urls == ['https://github.com/dotnet/standard/blob/master/LICENSE.TXT'], urls
           PY
+
+  package-licenses:
+    name: NuGet package license files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Pack NuGet without native artifacts
+        run: dotnet pack src/Ktav/Ktav.csproj --configuration Release --output "$RUNNER_TEMP/license-pack"
+      - name: Verify license files in package
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import zipfile
+          packages = list((Path(os.environ['RUNNER_TEMP']) / 'license-pack').glob('*.nupkg'))
+          assert len(packages) == 1, packages
+          with zipfile.ZipFile(packages[0]) as package:
+              for name in ('LICENSE-MIT', 'LICENSE-APACHE'):
+                  assert package.namelist().count(name) == 1, name
+                  assert package.read(name) == Path(name).read_bytes(), name
