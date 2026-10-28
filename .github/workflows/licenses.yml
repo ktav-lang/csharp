@@ -60,11 +60,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/dotnet/standard/archive/LICENSE.TXT > "$RUNNER_TEMP/netstandard-license.txt"
+          printf '%s  %s\n' cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310 "$RUNNER_TEMP/netstandard-license.txt" | sha256sum --check
+          printf '%s\n' '[{"Id":"NETStandard.Library","Version":"2.0.3","License":"MIT"}]' > "$RUNNER_TEMP/license-overrides.json"
           find . -type f -name "*.csproj" -print0 > "$RUNNER_TEMP/projects.list"
           count=0
           while IFS= read -r -d "" project; do
             count=$((count + 1))
             dotnet restore "$project"
-            "$RUNNER_TEMP/license-tools/nuget-license" -i "$project" -t -a "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC"
+            "$RUNNER_TEMP/license-tools/nuget-license" -i "$project" -t -a "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC" -override "$RUNNER_TEMP/license-overrides.json"
           done < "$RUNNER_TEMP/projects.list"
           test "$count" -gt 0
+          python - "$HOME/.nuget/packages/netstandard.library/2.0.3/netstandard.library.nuspec" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          urls = [element.text for element in root.iter() if element.tag.rsplit('}', 1)[-1] == 'licenseUrl']
+          assert urls == ['https://github.com/dotnet/standard/blob/master/LICENSE.TXT'], urls
+          PY
