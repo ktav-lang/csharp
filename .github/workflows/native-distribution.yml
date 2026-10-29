@@ -297,6 +297,7 @@ jobs:
           shutil.copy2(str(asset) + '.NOTICE.json', stage / 'NOTICE.json')
           manifest = json.loads(Path(str(asset) + '.NOTICE.manifest.json').read_text(encoding='utf-8'))
           manifest['binary'] = 'native/' + os.environ['NATIVE_FILENAME']
+          manifest['source_ref'] = os.environ['SOURCE_REF']
           with (stage / 'NOTICE.manifest.json').open('x', encoding='utf-8') as output:
               json.dump(manifest, output, sort_keys=True, indent=2)
       - uses: actions/upload-artifact@v4
