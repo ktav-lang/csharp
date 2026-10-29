@@ -1,0 +1,24 @@
+name: Platform license resolution
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-platform-resolution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore and pack
+        run: |
+          dotnet restore src/Ktav/Ktav.csproj
+          dotnet pack src/Ktav/Ktav.csproj --no-restore --configuration Release --output "$RUNNER_TEMP/ktav-pack"
+      - name: Verify exact packed consumer without platform override
+        run: python3 -I ci/check-platform-consumer.py "$RUNNER_TEMP/ktav-pack" "$RUNNER_TEMP/platform-consumer"
