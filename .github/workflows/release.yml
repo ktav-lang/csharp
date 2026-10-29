@@ -38,89 +38,10 @@ jobs:
   # runtimes/<rid>/native/.
   # ------------------------------------------------------------------
   pack:
-    name: Pack NuGet
-    runs-on: ubuntu-latest
     needs: [build-native]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Download runtimes payloads
-        uses: actions/download-artifact@v4
-        with:
-          pattern: runtimes-*
-          path: runtimes-staging
-          merge-multiple: true
-
-      - name: Lay out runtimes/ for csproj
-        shell: bash
-        run: |
-          mkdir -p src/Ktav/runtimes
-          for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
-            mkdir -p "src/Ktav/runtimes/${rid}"
-            cp -vR "runtimes-staging/${rid}/." "src/Ktav/runtimes/${rid}/"
-          done
-          find src/Ktav/runtimes -type f | sort
-
-      - name: Pack
-        run: dotnet pack src/Ktav/Ktav.csproj -c Release -o artifacts
-
-      - name: Verify package version and exact runtime payload
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          import zipfile
-          packages = list(Path('artifacts').glob('*.nupkg'))
-          if len(packages) != 1:
-              raise SystemExit('expected exactly one nupkg')
-          expected = {
-              'runtimes/linux-x64/native/libktav_cabi.so',
-              'runtimes/linux-arm64/native/libktav_cabi.so',
-              'runtimes/osx-x64/native/libktav_cabi.dylib',
-              'runtimes/osx-arm64/native/libktav_cabi.dylib',
-              'runtimes/win-x64/native/ktav_cabi.dll',
-              'runtimes/win-arm64/native/ktav_cabi.dll',
-          }
-          with zipfile.ZipFile(packages[0]) as package:
-              names = package.namelist()
-              native = [name for name in names if name.startswith('runtimes/')
-                        and '/native/' in name and not name.endswith('/')]
-              if len(native) != len(expected) or set(native) != expected:
-                  raise SystemExit(f'unexpected native payload: {native!r}')
-              for name in expected | {'lib/net8.0/Ktav.dll', 'lib/netstandard2.0/Ktav.dll'}:
-                  if names.count(name) != 1 or package.getinfo(name).file_size <= 0:
-                      raise SystemExit(f'missing, duplicate or empty payload: {name}')
-              specs = [name for name in names if name.endswith('.nuspec')]
-              if len(specs) != 1:
-                  raise SystemExit('expected exactly one nuspec')
-              root = ET.fromstring(package.read(specs[0]))
-              metadata = [node for node in root if node.tag.rsplit('}', 1)[-1] == 'metadata']
-              if len(metadata) != 1:
-                  raise SystemExit('expected exactly one nuspec metadata element')
-              versions = [node.text for node in metadata[0]
-                          if node.tag.rsplit('}', 1)[-1] == 'version']
-              if versions != ['0.8.1']:
-                  raise SystemExit(f'unexpected package version: {versions!r}')
-              tag = os.environ.get('RELEASE_TAG', '')
-              if tag and tag != 'v' + versions[0]:
-                  raise SystemExit(f'tag {tag!r} does not match package version')
-          print('package version, both managed targets and six native binaries verified')
-          PY
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nupkg
-          path: artifacts/*.nupkg
-          if-no-files-found: error
+    uses: ./.github/workflows/nuget-distribution.yml
+    with:
+      source-ref: ${{ github.sha }}
 
   # ------------------------------------------------------------------
   # Attach the six native binaries + the NuGet to the GitHub Release.

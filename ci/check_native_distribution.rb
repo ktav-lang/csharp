@@ -25,8 +25,23 @@ abort 'NuGet pack lacks native gate' unless Array(release.fetch('pack').fetch('n
 abort 'publication lacks package gate' unless Array(release.fetch('release').fetch('needs')).include?('pack')
 downloads = release.fetch('release').fetch('steps').select { |step| step['uses'].to_s.start_with?('actions/download-artifact@') }
 abort 'unsafe publication artifact selector' unless downloads.map { |step| step.fetch('with').slice('name', 'pattern') } == [{'pattern' => 'release-asset-*'}, {'name' => 'nupkg'}]
-pack_downloads = release.fetch('pack').fetch('steps').select { |step| step['uses'].to_s.start_with?('actions/download-artifact@') }
+pack_path = './.github/workflows/nuget-distribution.yml'
+producer = release.fetch('pack')
+abort 'production NuGet pack differs from CI' unless producer.fetch('uses') == pack_path && producer.fetch('with').fetch('source-ref') == '${{ github.sha }}'
+pack_caller = YAML.load_file('.github/workflows/native-distribution-check.yml').fetch('jobs').fetch('pack')
+abort 'PR NuGet source differs from native source' unless pack_caller.fetch('uses') == pack_path && pack_caller.fetch('with').fetch('source-ref') == caller.fetch('with').fetch('source-ref') && Array(pack_caller.fetch('needs')).include?('native-distribution')
+pack_workflow = YAML.load_file(pack_path)
+pack_contract = pack_workflow['on'] || pack_workflow[true]
+abort 'missing NuGet exact-source contract' unless pack_contract.fetch('workflow_call').fetch('inputs').fetch('source-ref').fetch('required')
+pack_steps = pack_workflow.fetch('jobs').fetch('pack').fetch('steps')
+pack_downloads = pack_steps.select { |step| step['uses'].to_s.start_with?('actions/download-artifact@') }
 abort 'unsafe NuGet native artifact selector' unless pack_downloads.map { |step| step.fetch('with').slice('name', 'pattern') } == [{'pattern' => 'runtimes-*'}]
+['Stage reviewed licensing overlay without API or framework changes', 'Verify NuGet container and overlay guards', 'Lay out exact RID native and notice files', 'Pack both original managed frameworks', 'Verify actual native-bearing NuGet and source identity'].each do |name|
+  step = pack_steps.find { |item| item['name'] == name }
+  abort "missing mandatory NuGet gate: #{name}" unless step && !step.key?('if') && !step['continue-on-error']
+end
+nupkg = pack_steps.find { |step| step['uses'].to_s.start_with?('actions/upload-artifact@') && step.fetch('with').fetch('name') == 'nupkg' }
+abort 'unsafe NuGet distribution artifact' unless nupkg && nupkg.fetch('with').fetch('path') == 'artifacts/*.nupkg'
 steps = job.fetch('steps')
 ['Prepare locked native notice resource', 'Verify embedded resource and write distribution sidecars', 'Run dotnet tests on matching target architecture', 'Stage exact RID native and notice payloads'].each do |name|
   step = steps.find { |item| item['name'] == name }
