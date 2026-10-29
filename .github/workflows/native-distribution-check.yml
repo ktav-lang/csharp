@@ -1,0 +1,18 @@
+name: Native distribution check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  native-distribution:
+    uses: ./.github/workflows/native-distribution.yml
+    with:
+      source-ref: 85ae0b1a1fbb67460ac501099ef0739797f786d6
+  pack:
+    needs: native-distribution
+    uses: ./.github/workflows/nuget-distribution.yml
+    with:
+      source-ref: 85ae0b1a1fbb67460ac501099ef0739797f786d6

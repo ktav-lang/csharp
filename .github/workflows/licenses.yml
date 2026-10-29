@@ -1,0 +1,106 @@
+name: License checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-licenses:
+    name: Cargo dependency licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate native distribution and publication gates
+        run: ruby ci/check_native_distribution.rb
+      - uses: EmbarkStudios/cargo-deny-action@b66acf5e9fe20f8aba065be86778a8a4c846f902
+        with:
+          command: check licenses
+
+  npm-licenses:
+    name: npm dependency licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --ignore-scripts
+      - name: Check npm lockfile
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const allowed = new Set(["MIT", "Apache-2.0", "MIT OR Apache-2.0", "Apache-2.0 OR MIT"]);
+          function check(lock) {
+            if (lock?.lockfileVersion !== 3 || !lock.packages || typeof lock.packages !== "object" || Array.isArray(lock.packages) || !lock.packages[""]) throw new Error("Invalid npm lockfile");
+            return Object.entries(lock.packages).filter(([path, pkg]) => path !== "" && !allowed.has(pkg?.license)).map(([path, pkg]) => `${path}: ${JSON.stringify(pkg?.license)}`);
+          }
+          assert.equal(check({ lockfileVersion: 3, packages: { "": {}, x: { license: "MIT AND GPL-3.0-only" } } }).length, 1);
+          assert.equal(check({ lockfileVersion: 3, packages: { "": {}, x: {} } }).length, 1);
+          assert.equal(check({ lockfileVersion: 3, packages: { "": {}, x: { license: "MIT" } } }).length, 0);
+          const failures = check(JSON.parse(readFileSync("package-lock.json", "utf8")));
+          if (failures.length) { console.error(failures.join("\n")); process.exitCode = 1; }
+          NODE
+
+  nuget-licenses:
+    name: NuGet dependency licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Install pinned license checker
+        run: dotnet tool install --tool-path "$RUNNER_TEMP/license-tools" nuget-license --version 4.0.18
+      - name: Check all projects and transitive dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/dotnet/standard/archive/LICENSE.TXT > "$RUNNER_TEMP/netstandard-license.txt"
+          printf '%s  %s\n' cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310 "$RUNNER_TEMP/netstandard-license.txt" | sha256sum --check
+          printf '%s\n' '[{"Id":"NETStandard.Library","Version":"2.0.0","License":"MIT"},{"Id":"NETStandard.Library","Version":"2.0.3","License":"MIT"}]' > "$RUNNER_TEMP/license-overrides.json"
+          find . -type f -name "*.csproj" -print0 > "$RUNNER_TEMP/projects.list"
+          count=0
+          while IFS= read -r -d "" project; do
+            count=$((count + 1))
+            dotnet restore "$project"
+            "$RUNNER_TEMP/license-tools/nuget-license" -i "$project" -t -a "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC" -override "$RUNNER_TEMP/license-overrides.json"
+          done < "$RUNNER_TEMP/projects.list"
+          test "$count" -gt 0
+          python - "$HOME/.nuget/packages/netstandard.library/2.0.0/netstandard.library.nuspec" "$HOME/.nuget/packages/netstandard.library/2.0.3/netstandard.library.nuspec" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          for path in sys.argv[1:]:
+              root = ET.parse(path).getroot()
+              urls = [element.text for element in root.iter() if element.tag.rsplit('}', 1)[-1] == 'licenseUrl']
+              assert urls == ['https://github.com/dotnet/standard/blob/master/LICENSE.TXT'], urls
+          PY
+
+  package-licenses:
+    name: NuGet package license files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Pack NuGet without native artifacts
+        run: dotnet pack src/Ktav/Ktav.csproj --configuration Release --output "$RUNNER_TEMP/license-pack"
+      - name: Verify license files in package
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import zipfile
+          packages = list((Path(os.environ['RUNNER_TEMP']) / 'license-pack').glob('*.nupkg'))
+          assert len(packages) == 1, packages
+          with zipfile.ZipFile(packages[0]) as package:
+              for name in ('LICENSE-MIT', 'LICENSE-APACHE'):
+                  assert package.namelist().count(name) == 1, name
+                  assert package.read(name) == Path(name).read_bytes(), name
