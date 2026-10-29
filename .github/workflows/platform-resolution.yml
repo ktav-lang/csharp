@@ -20,36 +20,5 @@ jobs:
         run: |
           dotnet restore src/Ktav/Ktav.csproj
           dotnet pack src/Ktav/Ktav.csproj --no-restore --configuration Release --output "$RUNNER_TEMP/ktav-pack"
-      - name: Verify resolved license and package dependencies
-        shell: python
-        run: |
-          import json
-          import os
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          import zipfile
-
-          assets = json.loads(Path('src/Ktav/obj/project.assets.json').read_text(encoding='utf-8'))
-          targets = [value for name, value in assets['targets'].items() if 'netstandard' in name.lower()]
-          assert len(targets) == 1, list(assets['targets'])
-          platforms = [key for key in targets[0] if key.lower().startswith('microsoft.netcore.platforms/')]
-          assert len(platforms) == 1 and platforms[0].lower() == 'microsoft.netcore.platforms/3.1.0', platforms
-          library = assets['libraries'][platforms[0]]
-          candidates = [Path(folder) / library['path'] for folder in assets['packageFolders']]
-          directories = [path for path in candidates if path.is_dir()]
-          assert len(directories) == 1, candidates
-          manifests = list(directories[0].glob('*.nuspec'))
-          assert len(manifests) == 1, manifests
-          metadata = ET.parse(manifests[0]).getroot()
-          licenses = [element for element in metadata.iter() if element.tag.rsplit('}', 1)[-1] == 'license']
-          assert len(licenses) == 1 and licenses[0].get('type') == 'expression' and licenses[0].text == 'MIT'
-
-          packages = list((Path(os.environ['RUNNER_TEMP']) / 'ktav-pack').glob('*.nupkg'))
-          assert len(packages) == 1, packages
-          with zipfile.ZipFile(packages[0]) as package:
-              names = [name for name in package.namelist() if name.endswith('.nuspec')]
-              assert len(names) == 1, names
-              nuspec = ET.fromstring(package.read(names[0]))
-          dependencies = [element.get('id') for element in nuspec.iter() if element.tag.rsplit('}', 1)[-1] == 'dependency']
-          assert 'Microsoft.NETCore.Platforms' not in dependencies, dependencies
-          assert 'System.Memory' in dependencies and 'System.Text.Json' in dependencies, dependencies
+      - name: Verify exact packed consumer without platform override
+        run: python3 -I ci/check-platform-consumer.py "$RUNNER_TEMP/ktav-pack" "$RUNNER_TEMP/platform-consumer"
