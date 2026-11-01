@@ -1,14 +1,19 @@
 name: C# Windows GNU LLVM candidate evidence
 
 on:
-  pull_request:
+  workflow_call:
+    inputs:
+      source-ref:
+        description: Exact reviewed original C# 0.8.1 source
+        required: true
+        type: string
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  SOURCE_REF: 85ae0b1a1fbb67460ac501099ef0739797f786d6
+  SOURCE_REF: ${{ inputs.source-ref || '85ae0b1a1fbb67460ac501099ef0739797f786d6' }}
 
 jobs:
   cabi-gnullvm:
@@ -442,3 +447,45 @@ jobs:
             ${{ runner.temp }}/csharp-gnu-delivered/consumer-*.txt
             ${{ runner.temp }}/csharp-gnu-delivered/consumer-*.trx
           if-no-files-found: warn
+
+  stage-release:
+    name: Stage verified GNU raw and RID / ${{ matrix.settings.rid }}
+    needs: [cabi-gnullvm, dotnet-consumers]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - target: x86_64-pc-windows-gnullvm
+            rid: win-x64
+            asset: ktav_cabi-windows-amd64.dll
+          - target: aarch64-pc-windows-gnullvm
+            rid: win-arm64
+            asset: ktav_cabi-windows-arm64.dll
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: csharp-cabi-gnu-candidate-${{ matrix.settings.target }}
+          path: ${{ runner.temp }}/csharp-gnu-delivered
+      - name: Stage exact verified DLL and full raw and RID notice sidecars
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I scripts/stage_csharp_gnu_release.py "$RUNNER_TEMP/csharp-gnu-delivered" "$RUNNER_TEMP/csharp-gnu-release" '${{ matrix.settings.target }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-${{ matrix.settings.rid }}
+          path: |
+            ${{ runner.temp }}/csharp-gnu-release/${{ matrix.settings.asset }}
+            ${{ runner.temp }}/csharp-gnu-release/${{ matrix.settings.asset }}.NOTICE.json
+            ${{ runner.temp }}/csharp-gnu-release/${{ matrix.settings.asset }}.NOTICE.manifest.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtimes-${{ matrix.settings.rid }}
+          path: ${{ runner.temp }}/csharp-gnu-release/runtimes/
+          if-no-files-found: error
