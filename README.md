@@ -478,6 +478,20 @@ pure backend.
 - Linux distros must use glibc 2.17+ (zigbuild baseline). Alpine
   (musl) support is planned.
 
+The prepared **0.8.1** Windows native distribution uses genuine
+`x86_64-pc-windows-gnullvm` and `aarch64-pc-windows-gnullvm` targets with
+the pinned LLVM MinGW UCRT SDK, not the MSVC build path. The public
+`win-x64` / `win-arm64` RIDs and DLL filenames remain unchanged. Genuine
+x64/ARM64 .NET 8 consumers run the original source/spec tests without
+Rust or SDK paths before raw and RID payloads are staged. Each DLL
+retains its embedded Cargo/std, Rust compiler and GNU runtime source/grant
+resource; raw sidecars and NuGet `runtimes/<rid>/NOTICE.json` plus
+`NOTICE.manifest.json` preserve the complete original materials and
+binary/source identities. Managed frameworks and dependencies are
+unchanged. Consumers do not need Rust or a native compiler; the pure
+managed backend remains self-contained. This preparation does not
+publish a package or replace historical release assets.
+
 ## License
 
 MIT OR Apache-2.0 — see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).

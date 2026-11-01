@@ -464,6 +464,17 @@ ABI 形态版本（自 0.9 的编辑导出起为 **2**）进行比对。较旧�
   `win-x64`、`win-arm64`。
 - Linux 发行版需 glibc 2.17+（zigbuild 基线）。Alpine（musl）支持已规划。
 
+准备中的 **0.8.1** Windows 原生分发使用真正的
+`x86_64-pc-windows-gnullvm` 和 `aarch64-pc-windows-gnullvm` 目标及固定的
+LLVM MinGW UCRT SDK，而非 MSVC 构建路径。公开的 `win-x64` / `win-arm64`
+RID 和 DLL 文件名保持不变。在暂存 raw 和 RID 载荷之前，真正的 x64/ARM64
+.NET 8 使用者会在移除 Rust 和 SDK 路径后运行原始源码与规范测试。每个 DLL
+保留内嵌的 Cargo/std、Rust 编译器及 GNU runtime 源码/许可资源；raw 配套文件
+以及 NuGet 的 `runtimes/<rid>/NOTICE.json` 和 `NOTICE.manifest.json`
+保留完整原文及二进制/源码身份。托管框架和依赖保持不变。使用者无需 Rust
+或原生编译器；纯托管后端仍然自包含。这些准备不会发布软件包，也不会替换
+历史 release 资产。
+
 ## 许可证
 
 MIT OR Apache-2.0 —— 见 [LICENSE-MIT](../../LICENSE-MIT) 和 [LICENSE-APACHE](../../LICENSE-APACHE)。
