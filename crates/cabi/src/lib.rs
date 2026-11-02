@@ -11,3 +11,6 @@
 //! against before loading.
 
 ktav::declare_cabi!();
+
+// Статический license resource; не передаётся в ktav_free.
+include!(concat!(env!("OUT_DIR"), "/native_notices.rs"));

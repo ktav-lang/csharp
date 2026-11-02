@@ -480,6 +480,20 @@ macOS, `$XDG_CACHE_HOME` или `~/.cache` на Linux.
 - Дистрибутивы Linux должны использовать glibc 2.17+ (базовая линия
   zigbuild). Поддержка Alpine (musl) запланирована.
 
+Подготовленная нативная Windows-дистрибуция **0.8.1** использует настоящие
+цели `x86_64-pc-windows-gnullvm` и `aarch64-pc-windows-gnullvm` с
+закреплённым LLVM MinGW UCRT SDK, а не сборку MSVC. Публичные RIDs
+`win-x64` / `win-arm64` и имена DLL сохранены. Перед staging raw- и
+RID-payloads настоящие x64/ARM64 .NET 8 consumers выполняют исходные
+source/spec tests без путей Rust или SDK. Каждая DLL сохраняет встроенный
+ресурс Cargo/std, Rust compiler и исходных текстов/лицензий GNU runtime;
+raw-sidecars и NuGet `runtimes/<rid>/NOTICE.json` вместе с
+`NOTICE.manifest.json` сохраняют полные оригинальные материалы и
+идентичности бинарника/исходников. Managed frameworks и зависимости не
+изменены. Потребителям не нужны Rust или нативный компилятор; чистый
+управляемый бэкенд остаётся самодостаточным. Эта подготовка не публикует
+пакет и не заменяет исторические release assets.
+
 ## Лицензия
 
 MIT OR Apache-2.0 — см. [LICENSE-MIT](../../LICENSE-MIT) и [LICENSE-APACHE](../../LICENSE-APACHE).

@@ -1,0 +1,118 @@
+name: Verified native-bearing NuGet
+
+on:
+  workflow_call:
+    inputs:
+      source-ref:
+        description: Exact managed and native source commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: 'true'
+
+jobs:
+  pack:
+    name: Pack and verify native-bearing NuGet
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REF: ${{ inputs.source-ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve NuGet notice tooling
+        shell: python
+        run: |
+          import os
+          import re
+          import shutil
+          from pathlib import Path
+          if not re.fullmatch(r'[0-9a-f]{40}', os.environ['SOURCE_REF']):
+              raise SystemExit('source-ref must be an exact commit SHA')
+          tools = Path(os.environ['RUNNER_TEMP']) / 'nuget-notice-tools'
+          tools.mkdir()
+          for name in ['scripts/check_native_nupkg.py', 'scripts/check_embedded_notices.py', 'scripts/prepare_nuget_source.py', 'ci/test_native_nupkg.py', 'ci/test_prepare_nuget_source.py']:
+              target = tools / name
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(name, target)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source-ref }}
+          persist-credentials: false
+      - name: Stage reviewed licensing overlay without API or framework changes
+        shell: python
+        run: |
+          import os
+          import shutil
+          import subprocess
+          import sys
+          from pathlib import Path
+          tools = Path(os.environ['RUNNER_TEMP']) / 'nuget-notice-tools'
+          for name in tools.rglob('*'):
+              if not name.is_file():
+                  continue
+              target = Path(name.relative_to(tools))
+              if target.exists() and target.read_bytes() != name.read_bytes():
+                  raise SystemExit('existing NuGet helper requires source review')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(name, target)
+          subprocess.run([sys.executable, 'scripts/prepare_nuget_source.py', os.environ['SOURCE_REF'], str(Path(os.environ['RUNNER_TEMP']) / 'nuget-source-provenance.json')], check=True)
+      - name: Verify NuGet container and overlay guards
+        run: |
+          python3 -I -m unittest discover -s ci -p test_native_nupkg.py -v
+          python3 -I -m unittest discover -s ci -p test_prepare_nuget_source.py -v
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Download verified RID payloads
+        uses: actions/download-artifact@v4
+        with:
+          pattern: runtimes-*
+          path: runtimes-staging
+          merge-multiple: true
+      - name: Lay out exact RID native and notice files
+        shell: python
+        run: |
+          import shutil
+          from pathlib import Path
+          rids = {'linux-x64': 'libktav_cabi.so', 'linux-arm64': 'libktav_cabi.so', 'osx-x64': 'libktav_cabi.dylib', 'osx-arm64': 'libktav_cabi.dylib', 'win-x64': 'ktav_cabi.dll', 'win-arm64': 'ktav_cabi.dll'}
+          stage = Path('runtimes-staging')
+          expected = {f'{rid}/{name}' for rid, library in rids.items() for name in ('native/' + library, 'NOTICE.json', 'NOTICE.manifest.json')}
+          actual = {path.relative_to(stage).as_posix() for path in stage.rglob('*') if path.is_file()}
+          if actual != expected:
+              raise SystemExit('unexpected staged NuGet RID payloads')
+          destination = Path('src/Ktav/runtimes')
+          for path in stage.rglob('*'):
+              if not path.is_file():
+                  continue
+              target = destination / path.relative_to(stage)
+              if target.exists() and target.read_bytes() != path.read_bytes():
+                  raise SystemExit('source contains a different existing native payload')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(path, target)
+      - name: Pack both original managed frameworks
+        run: dotnet pack src/Ktav/Ktav.csproj -c Release -o artifacts
+      - name: Verify actual native-bearing NuGet and source identity
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+        run: |
+          set -euo pipefail
+          python3 -I scripts/check_native_nupkg.py artifacts src/Ktav/runtimes . "$SOURCE_REF" > "$RUNNER_TEMP/nuget-notice-verification.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nuget-license-evidence
+          path: |
+            ${{ runner.temp }}/nuget-source-provenance.json
+            ${{ runner.temp }}/nuget-notice-verification.json
+            src/Ktav/obj/project.assets.json
+          if-no-files-found: warn
